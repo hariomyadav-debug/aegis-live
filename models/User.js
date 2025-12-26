@@ -223,6 +223,11 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 0
     },
+    diamond:{
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      defaultValue: 0
+    },
     // Bank Related Tasks
     account_name: {
       type: DataTypes.STRING,

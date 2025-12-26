@@ -60,7 +60,7 @@ async function sendPushNotification({
 
     try {
         
-        console.log("notification",notification);
+        // console.log("notification",notification);
         
         const response = await fetch('https://onesignal.com/api/v1/notifications', {
             method: 'POST',
@@ -70,7 +70,7 @@ async function sendPushNotification({
             },
             body: JSON.stringify(notification),
         });
-        console.log("OneSignal Res",response);
+        // console.log("OneSignal Res",response);
         
         return response.data;
     } catch (error) {

@@ -1,7 +1,8 @@
 const { Op } = require('sequelize');
 const { Sequelize } = require('sequelize');
 
-const { Gift  } = require("../../../models");
+const { Gift } = require("../../../models");
+require("dotenv").config();
 
 
 async function createGift(gift_payload) {
@@ -36,7 +37,7 @@ async function getGift(gift_payload, pagination = { page: 1, pageSize: 10 }, exc
         }
         // Add pagination options to the payload
         const query = {
-            where:wherecondition,
+            where: wherecondition,
             limit,
             offset,
             order: [
@@ -44,13 +45,20 @@ async function getGift(gift_payload, pagination = { page: 1, pageSize: 10 }, exc
             ],
             include: includeOptions,
         };
-        
+
         // Use findAndCountAll to get both rows and count
         const { rows, count } = await Gift.findAndCountAll(query);
-        
+
+        const records = rows.map(gift => ({
+            ...gift.toJSON(),
+            gift_animation:`${process.env.baseUrl}/uploads/gif/coin_send.svga`,
+            animation_type: 'svga',
+
+        }));
+
         // Prepare the structured response
         return {
-            Records: rows,
+            Records: records,
             Pagination: {
                 total_pages: Math.ceil(count / pageSize),
                 total_records: Number(count),

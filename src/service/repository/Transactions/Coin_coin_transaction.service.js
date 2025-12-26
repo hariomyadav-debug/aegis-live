@@ -258,7 +258,47 @@ async function getCoinToCoinTransaction(
 // }
 
 
+async function getGiftSendingReceivingByUserId(user_id) {
+    // totals for sent
+    const sent = await Coin_to_coin.findOne({
+        attributes: [
+            [Sequelize.fn('COUNT', Sequelize.col('transaction_id')), 'sent_count'],
+            [Sequelize.fn('COALESCE', Sequelize.fn('SUM', Sequelize.col('quantity')), 0), 'sent_quantity'],
+            [Sequelize.fn('COALESCE', Sequelize.fn('SUM', Sequelize.col('coin')), 0), 'sent_coin']
+        ],
+        where: { sender_id: user_id },
+        raw: true
+    });
+
+    // totals for received
+    const received = await Coin_to_coin.findOne({
+        attributes: [
+            [Sequelize.fn('COUNT', Sequelize.col('transaction_id')), 'received_count'],
+            [Sequelize.fn('COALESCE', Sequelize.fn('SUM', Sequelize.col('quantity')), 0), 'received_quantity'],
+            [Sequelize.fn('COALESCE', Sequelize.fn('SUM', Sequelize.col('coin')), 0), 'received_coin']
+        ],
+        where: { reciever_id: user_id },
+        raw: true
+    });
+
+    return {
+        user_id,
+        sent: {
+            count: Number(sent?.sent_count) || 0,
+            quantity: Number(sent?.sent_quantity) || 0,
+            coin: Number(sent?.sent_coin) || 0
+        },
+        received: {
+            count: Number(received?.received_count) || 0,
+            quantity: Number(received?.received_quantity) || 0,
+            coin: Number(received?.received_coin) || 0
+        }
+    };
+}
+
+
 module.exports = {
     createCoinToCoinTransaction,
     getCoinToCoinTransaction,
+    getGiftSendingReceivingByUserId,
 }

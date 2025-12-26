@@ -16,9 +16,15 @@ const transactionRoutes = require("./transaction.routes")
 const liveRoutes = require("./live.routes") 
 const hashtag_routes = require("./hashtag.routes")
 const admin_routes= require("./admin.routes") 
+const auth_routes = require('./auth.routes')
 const avatar_routes= require("./Avatar.routes") 
 const language_routes= require("./Language.routes"); 
+const leaderboard_routes= require("./leaderboard.routes"); 
+
+const store_routes = require("./store.routes")
+
 const { get_Config } = require("../controller/Admin_controller/ProjectConf.controller");
+const pkRoutes = require("./pk.routes");
 
 const router = Router();
 
@@ -37,7 +43,9 @@ router.use('/ecommerce',productRoutes );
 router.use("/music" , musicRoutes)
 router.use("/gift" , giftRoutes)
 router.use("/transaction", transactionRoutes)
+router.use("/leader-board", leaderboard_routes)
 router.use("/live", liveRoutes )
+router.use("/pk", pkRoutes )
 
 router.use("/hashtag", hashtag_routes )
 
@@ -46,8 +54,13 @@ router.use("/avatar", avatar_routes )
 router.use("/language", language_routes )
 // Admin routes
 router.use("/admin", admin_routes )
+router.use("/auth", auth_routes )
 
 // Conf routes 
 router.get("/project_conf", get_Config)
+
+
+// New addeding
+router.use('/store', store_routes)
 
 module.exports = router;

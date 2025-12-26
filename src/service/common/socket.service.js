@@ -16,6 +16,8 @@ const {
   delete_for_me
 } = require("../../controller/chat_controller/Message.controller");
 const { start_live, leave_live, stop_live, join_live, activity_on_live, request_to_be_host, leave_live_as_host, accept_request_for_new_host } = require("../../controller/Live_controller/Live.controller");
+const { start_audio_stream, join_audio_stream, stop_audio_stream, request_to_join_audio_stream, accept_request_to_join_audio_stream, leave_audio_stream_as_user, muted_by_host, mute_toggle_by_host, mute_toggle_by_user, gift_send_to_user } = require("../../controller/Stream_controller/Stream.controller");
+const { pk_battle_request, pk_battle_request_response, pk_webrtc_offer, pk_webrtc_answer, pk_webrtc_ice_candidate, cohost_request, cohost_request_response, cohost_leave, remove_cohost, end_pk } = require("../../controller/pk_controller/Pk.controller");
 
 let io;
 
@@ -30,7 +32,6 @@ const initSocket = (serverwithsockets) => {
     listenToEvent(socket, "chat_list", (data) => {
       chat_list(socket, data, emitEvent);
     });
-
     listenToEvent(socket, "message_list", (data) => {
       message_list(socket, data, emitEvent);
     });
@@ -61,6 +62,8 @@ const initSocket = (serverwithsockets) => {
       leave_live(socket, data, emitEvent, leaveRoom, emitToRoom);
     });
     listenToEvent(socket, "activity_on_live", (data) => {
+      console.log("activity_on_live: received");
+      console.log(data);
       activity_on_live(socket, data, emitEvent, emitToRoom);
     });
     listenToEvent(socket, "stop_live", (data) => {
@@ -72,9 +75,93 @@ const initSocket = (serverwithsockets) => {
     listenToEvent(socket, "accept_request_for_new_host", (data) => {
       accept_request_for_new_host(socket, data, emitEvent, joinRoom, emitToRoom);
     });
-    listenToEvent(socket, "accept_request_for_new_host", (data) => {
-      leave_live_as_host(socket, data, emitEvent, leaveRoom, emitToRoom);
+
+    // TODO: check these later
+    // listenToEvent(socket, "accept_request_for_new_host", (data) => {
+    //   leave_live_as_host(socket, data, emitEvent, leaveRoom, emitToRoom);
+    // });
+
+    // -------  for Streaming
+    listenToEvent(socket, "start_audio_stream", (data) => {
+      data = data?.emit_type ? data : { ...data, emit_type: "all" };  // By defalt to all
+      start_audio_stream(socket, data, emitEvent, joinRoom);
     });
+    listenToEvent(socket, "join_audio_stream", (data) => {
+      data = data?.emit_type ? data : { ...data, emit_type: "all" };
+      join_audio_stream(socket, data, emitEvent, joinRoom, emitToRoom, getRoomMembers, broadcastEvent);
+    });
+    listenToEvent(socket, "stop_audio_stream", (data) => {
+      data = data?.emit_type ? data : { ...data, emit_type: "all" };
+      stop_audio_stream(socket, data, emitEvent, emitToRoom, disposeRoom);
+    });
+    listenToEvent(socket, "request_to_join_audio_stream", (data) => {
+      data = data?.emit_type ? data : { ...data, emit_type: "all" };
+      request_to_join_audio_stream(socket, data, emitEvent, joinRoom, emitToRoom);
+    });
+    listenToEvent(socket, "accept_request_to_join_audio_stream", (data) => {
+      data = data?.emit_type ? data : { ...data, emit_type: "" };
+      accept_request_to_join_audio_stream(socket, data, emitEvent, joinRoom, emitToRoom);
+    });
+    listenToEvent(socket, "leave_audio_stream_as_user", (data) => {
+      data = data?.emit_type ? data : { ...data, emit_type: "all" };
+      leave_audio_stream_as_user(socket, data, emitEvent, leaveRoom, emitToRoom);
+    });
+
+    listenToEvent(socket, "mute_toggle_by_host", (data) => {
+      mute_toggle_by_host(socket, data, emitEvent, emitToRoom);
+    });
+
+    listenToEvent(socket, "mute_toggle_by_user", (data) => {
+      mute_toggle_by_user(socket, data, emitEvent, emitToRoom);
+    });
+
+    listenToEvent(socket, "gift_send_to_user", (data) => {
+      gift_send_to_user(socket, data, emitEvent, emitToRoom);
+    });
+
+    // ------------ For PK battle (Coming Soon) --------------
+    listenToEvent(socket, "pk_battle_request", (data) => {
+      pk_battle_request(socket, data, emitEvent);
+    });
+    listenToEvent(socket, "pk_battle_request_response", (data) => {
+      pk_battle_request_response(socket, data, emitEvent, emitToRoom, broadcastEvent);
+    });
+    //   listenToEvent(socket, "live_state_update", (data) => {
+    //   live_state_update(socket, data, emitEvent, emitToRoom);
+    // });
+    listenToEvent(socket, "end_pk", (data) => {
+      end_pk(socket, data, emitEvent, emitToRoom, broadcastEvent);
+    });
+    listenToEvent(socket, "pk_webrtc_offer", (data) => {
+      pk_webrtc_offer(socket, data, emitEvent);
+    });
+    listenToEvent(socket, "pk_webrtc_answer", (data) => {
+      pk_webrtc_answer(socket, data, emitEvent);
+    });
+    listenToEvent(socket, "pk_webrtc_ice_candidate", (data) => {
+      pk_webrtc_ice_candidate(socket, data, emitEvent);
+    });
+
+
+    // -------------------------- For Live ---------------
+
+    listenToEvent(socket, "cohost_request", (data) => {
+      cohost_request(socket, data, emitEvent);
+    });
+
+    listenToEvent(socket, "cohost_request_response", (data) => {
+      cohost_request_response(socket, data, emitEvent, emitToRoom, joinRoom);
+    });
+
+    listenToEvent(socket, "cohost_leave", (data) => {
+      cohost_leave(socket, data, emitEvent, emitToRoom);
+    });
+
+    listenToEvent(socket, "remove_cohost", (data) => {
+      remove_cohost(socket, data, emitEvent);
+    });
+
+
 
     // Handle disconnection
     socket.on("disconnect", async () => {
@@ -147,7 +234,7 @@ const initSocket = (serverwithsockets) => {
               "offline_user",
               userWithSelectedFields
             );
-          // }
+            // }
           });
         });
       }
@@ -157,15 +244,24 @@ const initSocket = (serverwithsockets) => {
 };
 
 // Emit event to a specific socket
-const emitEvent = (socket_id, event, data) => {
+const emitEvent = (socket_id, event, data, type = "") => {
+  // console.log('emitdata-----------', data);
   // Retrieve the socket instance using the socket_id
-  const socket = io.sockets.sockets.get(socket_id);
-  if (socket) {
-    // console.log("Emmited to", socket_id, "Event", event , "data" ,data);
+  if (type === "all") {
+    // Broadcast to all sockets
+    io.emit(event, data);
+    console.log(`Event "${event}" emitted to all sockets with data: ${data}\n `);
 
-    socket.emit(event, data);
   } else {
-    console.warn(`Socket with ID ${socket_id} is not connected`);
+    // Specific socket or User To User
+    const socket = io.sockets.sockets.get(socket_id);
+    if (socket) {
+      // console.log("Emmited to", socket_id, "Event", event , "data" ,data);
+
+      socket.emit(event, data);
+    } else {
+      console.warn(`Socket with ID ${socket_id} is not connected`);
+    }
   }
 };
 
@@ -206,6 +302,7 @@ const disposeSocket = () => {
 // Broadcast event to all connected clients
 const broadcastEvent = (event, data) => {
   if (io) {
+    console.log(`Broadcasting event "${event}" with data: ${data}\n `);
     io.emit(event, data);
   } else {
     console.warn("Socket server is not initialized");
@@ -262,9 +359,14 @@ const disposeRoom = (roomId) => {
  */
 
 const emitToRoom = (roomId, event, data) => {
+
+  io.in(roomId).fetchSockets().then(sockets => {
+  console.log("Sockets in room:", roomId, sockets.map(s => s.id));
+});
+
   if (io) {
     io.to(roomId).emit(event, data);
-    // console.log(`Event "${event}" emitted to room: ${roomId} data is ${data}\n `);
+    console.log(`Event "${event}" emitted to room: ${roomId} data is ${data}\n `);
 
   } else {
     console.warn('Socket.io not initialized');
@@ -273,7 +375,8 @@ const emitToRoom = (roomId, event, data) => {
 
 const getRoomMembers = async (roomId) => {
   if (io) {
-    const sockets = await ioInstance.in(roomId).allSockets();
+    // const sockets = await ioInstance.in(roomId).allSockets();
+    const sockets = await io.in(roomId).allSockets();
     return Array.from(sockets);
   } else {
     console.warn('Socket.io not initialized');

@@ -312,6 +312,7 @@ async function sendMessage(req, res) {
           NewMessageAfterCreation.Records[0].peerUserData = user_data;
           NewMessageAfterCreation.Records[0].unseen_count = 0;
 
+           console.log("Emitting to slef socket id:", glob_user.socket_id);
 
           socket_service.emitEvent(
             glob_user.socket_id,
@@ -474,6 +475,7 @@ async function sendMessage(req, res) {
 
           }
 
+          console.log("Emitting to other socket id:", is_user?.socket_id);
 
           socket_service.emitEvent(
             is_user?.socket_id,

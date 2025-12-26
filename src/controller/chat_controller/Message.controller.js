@@ -592,27 +592,31 @@ async function get_chat_id(socket, data) {
         user_id: socket.authData.user_id,
       });
 
-    // Create an array of chat_ids
-    const chatIds = participants.Records.map(
-      (participant) => participant.chat_id
-    );
-
-    // Extract chat_ids from participants
-    const userChatIds = await Promise.all(
-      chatIds.map(async (chat) => {
-        const participants =
+      console.log("Participants:--------",socket.authData.user_id, participants);
+      
+      // Create an array of chat_ids
+      const chatIds = participants.Records.map(
+        (participant) => participant.chat_id
+      );
+      console.log("Participants:q--------", chatIds);
+      
+      // Extract chat_ids from participants
+      const userChatIds = await Promise.all(
+        chatIds.map(async (chat) => {
+          const participants =
           await participant_service.getParticipantWithoutPagenation({
             chat_id: chat,
             user_id: { [Op.ne]: isUser.user_id }, // Exclude user with this user_id
           });
-
-        // Extract user_ids for each chat
-        return {
-          chat_id: chat,
-          user_id: participants.Records[0].user_id,
-        };
-      })
-    );
+          
+          // Extract user_ids for each chat
+          return {
+            chat_id: chat,
+            user_id: participants.Records[0].user_id,
+          };
+        })
+      );
+      console.log("Participants:q-s-------", userChatIds);
     // Return chat IDs
     return { ChatIds: userChatIds };
   } catch (error) {

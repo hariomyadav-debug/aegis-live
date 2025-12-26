@@ -1,6 +1,6 @@
 const { Sequelize, Op } = require('sequelize');
 
-const { User, Social } = require("../../../models");
+const { User, Follow, Block, Social } = require("../../../models");
 
 
 const getUsers = async (
@@ -215,6 +215,95 @@ async function getUserCountData(userPayload = {}, extraOptions = {}) {
     }
 }
 
+async function getRecommendedUsers(currentUserId, pageNumber = 1) {
+    const page = parseInt(pageNumber);
+    const limit = 10;                    // first load 10 users
+    const offset = (page - 1) * limit;
+
+    try {
+        // 1️⃣ Users already followed (approved = true)
+        const following = await Follow.findAll({
+            where: { follower_id: currentUserId, approved: true },
+            attributes: ["user_id"],
+        });
+
+        const followingIds = following.map(f => f.user_id);
+
+        // 2️⃣ Pending follow requests sent by current user
+        const pending = await Follow.findAll({
+            where: { follower_id: currentUserId, approved: false },
+            attributes: ["user_id"],
+        });
+        const pendingIds = pending.map(f => f.user_id);
+
+        // 3️⃣ Blocked users
+        const blocked = await Block.findAll({
+            where: { user_id: currentUserId },
+            attributes: ["blocked_id"],
+        });
+        const blockedIds = blocked.map(b => b.blocked_id);
+
+        // 4️⃣ Mutual follower count query
+        const mutualFollowers = Sequelize.literal(`(
+          SELECT COUNT(*) FROM "Follows" AS f1
+          WHERE f1.user_id = "User"."user_id"
+          AND f1.follower_id IN (
+            SELECT follower_id FROM "Follows"
+            WHERE user_id = ${currentUserId}
+            AND approved = true
+          )
+        )`);
+
+        // 5️⃣ Fetch recommended users
+        const recommended = await User.findAndCountAll({
+            where: {
+                user_id: {
+                    [Op.ne]: currentUserId,                               // exclude yourself
+                    [Op.notIn]: [...followingIds, ...pendingIds, ...blockedIds],
+                },
+                is_deleted: false
+            },
+            attributes: [
+                "user_id",
+                "full_name",
+                "user_name",
+                "profile_pic",
+                "intrests",
+                "total_socials",
+                "available_coins",
+                [mutualFollowers, "mutual_followers"],
+            ],
+            order: [
+                [Sequelize.literal("mutual_followers"), "DESC"],
+                ["total_socials", "DESC"]
+            ],
+            limit: limit,
+            offset: offset,
+        });
+
+        return recommended.rows
+
+    } catch (error) {
+        console.error("Recommended Users Error:", err);
+        throw err;  // proper error throw
+    }
+}
+
+
+async function getAllUsers(userPayload, attributes) {
+    try {
+        const users = await User.findAll({
+            where: userPayload,
+            attributes: attributes
+        });
+        return users;
+    } catch (error) {
+        console.error('Error fetching get all Users by sockets:', error);
+        throw new Error('Could not retrieve users');
+    }
+}
+
+
 module.exports = {
     getUser,
     getUsers,
@@ -223,5 +312,7 @@ module.exports = {
     isPrivate,
     isAdmin,
     getUserCount,
-    getUserCountData
+    getUserCountData,
+    getRecommendedUsers,
+    getAllUsers
 };

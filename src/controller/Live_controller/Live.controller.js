@@ -5,9 +5,14 @@ const {
 
 const { createLive, generateRoomId, getLive, deleteLive, updateLive } = require("../../service/repository/Live.service");
 const { generalResponse } = require("../../helper/response.helper");
-const { isFollow, getFollow } = require("../../service/repository/Follow.service");
+const { isFollow, getFollow, countFollows } = require("../../service/repository/Follow.service");
 const { sendPushNotification } = require("../../service/common/onesignal.service");
 const { createLiveHost, getLiveLive_host } = require("../../service/repository/Live_host.service");
+const { getAudioStream, updateAudioStream } = require("../../service/repository/Audio_stream.service");
+const { getGiftSendingReceivingByUserId } = require("../../service/repository/Transactions/Coin_coin_transaction.service");
+const bannerData = require("../../data/banner.data");
+const { getPkByIdWith, getPkById } = require("../../service/repository/Pk.service");
+const { Op } = require("sequelize");
 
 async function start_live(socket, data, emitEvent, joinRoom) {
 
@@ -17,9 +22,9 @@ async function start_live(socket, data, emitEvent, joinRoom) {
         return next(new Error("User not found."));
     }
 
-    if (!data.peer_id) {
-        return emitEvent(socket.id, "start_live", "Peer id is required");
-    }
+    // if (!data.peer_id) {
+    //     return emitEvent(socket.id, "start_live", "Peer id is required");
+    // }
     const room_id = generateRoomId();
     joinRoom(socket, room_id);
     const live_payload = {
@@ -34,7 +39,7 @@ async function start_live(socket, data, emitEvent, joinRoom) {
     if (newLive) {
         const live_host_payload = {
             user_id: isUser.user_id,
-            peer_id: data.peer_id,
+            peer_id: data.peer_id ? data.peer_id : "",
             live_id: newLive.live_id,
             is_main_host: true
         }
@@ -70,7 +75,7 @@ async function start_live(socket, data, emitEvent, joinRoom) {
                 data: {
                     type: "live",
                     user_id: isUser.user_id,
-                    peer_id: data.peer_id,
+                    peer_id: data.peer_id ? data.peer_id : "",
                     live_id: newLive.live_id,
                     is_main_host: true
                 }
@@ -108,7 +113,9 @@ async function stop_live(socket, data, emitEvent, emitToRoom, disposeRoom) {
     if (delete_live) {
         emitToRoom(data.socket_room_id, "stop_live", {
             stop_live: true,
-            live_host: already_host
+            live_host: already_host,
+            socket_room_id: data.socket_room_id,
+            streamer_id: data.streamer_id,
         });
         disposeRoom(socket, already_live.Records[0].socket_room_id);
         return
@@ -126,7 +133,10 @@ async function join_live(socket, data, emitEvent, joinRoom, emitToRoom) {
             return next(new Error("User not found."));
         }
 
-        if (!data.socket_room_id && !data.user_id && !data.peer_id) {
+        // if (!data.socket_room_id && !data.user_id && !data.peer_id) {
+        //     return emitEvent(socket.id, "join_live", "Data is missing");
+        // }
+        if (!data.socket_room_id && !data.user_id) {
             return emitEvent(socket.id, "join_live", "Data is missing");
         }
 
@@ -150,10 +160,12 @@ async function join_live(socket, data, emitEvent, joinRoom, emitToRoom) {
             }
         );
 
-        return emitToRoom(data.socket_room_id, "join_live", {
+        
+        emitToRoom(data.socket_room_id, "join_live", {
             total_viewers: already_live.Records[0].total_viewers + 1,
             curent_viewers: already_live.Records[0].curent_viewers + 1,
             likes: already_live.Records[0].likes,
+            live_id: already_live.Records[0].live_id,
             User: {
                 user_id: isUser.user_id,
                 full_name: isUser.full_name,
@@ -162,10 +174,36 @@ async function join_live(socket, data, emitEvent, joinRoom, emitToRoom) {
                 user_name: isUser.user_name,
                 profile_pic: isUser.profile_pic
             },
-            peer_id: already_live.Records[0].Live_hosts,
+            peer_id: already_live.Records[0].Live_hosts ? already_live.Records[0].Live_hosts : "",
             // streamer_id: already_live.Records[0].user_id,
             is_live: true
         });
+
+        //  For PK Update
+        let main_host_user_id = 0;
+        for (const record of already_live.Records) {
+            const host = record.Live_hosts?.find(h => h.is_main_host);
+            if (host) {
+                main_host_user_id = host.user_id;
+                break;
+            }
+        }
+
+        // live_state_update 
+        if (main_host_user_id) {
+            const payload = {
+                [Op.or]: [
+                    { host1_socket_room_id: data.socket_room_id, host1_user_id: main_host_user_id },
+                    { host2_socket_room_id: data.socket_room_id, host2_user_id: main_host_user_id }
+                ]
+            };
+
+            const pkdetails = await getPkById(payload);
+            if (pkdetails) {
+                // PK Update on join user
+                return emitEvent(socket.id, "live_state_update", pkdetails.dataValues);
+            }
+        }
     }
     catch (error) {
         console.log("error in join live", error);
@@ -181,7 +219,11 @@ async function request_to_be_host(socket, data, emitEvent, joinRoom, emitToRoom)
         return next(new Error("User not found."));
     }
 
-    if (!data.socket_room_id && !data.user_id && !data.peer_id) {
+    // if (!data.socket_room_id && !data.user_id && !data.peer_id) {
+    //     return emitEvent(socket.id, "request_to_be_host", "Data is missing");
+    // }
+
+    if (!data.socket_room_id && !data.user_id) {
         return emitEvent(socket.id, "request_to_be_host", "Data is missing");
     }
 
@@ -222,9 +264,9 @@ async function request_to_be_host(socket, data, emitEvent, joinRoom, emitToRoom)
                 last_name: isUser.last_name,
                 user_name: isUser.user_name,
                 profile_pic: isUser.profile_pic,
-                peer_id: data.peer_id
+                peer_id: data?.peer_id
             },
-            // peer_id: already_live.Records[0].peer_id,
+            peer_id: already_live.Records[0].peer_id ? already_live.Records[0].peer_id : "",
             // streamer_id: already_live.Records[0].user_id,
             is_live: true
 
@@ -237,7 +279,11 @@ async function accept_request_for_new_host(socket, data, emitEvent, joinRoom, em
         return next(new Error("User not found."));
     }
 
-    if (!data.socket_room_id && !data.user_id && !data.peer_id && !data.new_host_peer_id) {
+    // if (!data.socket_room_id && !data.user_id && !data.peer_id && !data.new_host_peer_id) {
+    //     return emitEvent(socket.id, "accept_request_for_new_host", "Data is missing");
+    // }
+
+    if (!data.socket_room_id && !data.user_id) {
         return emitEvent(socket.id, "accept_request_for_new_host", "Data is missing");
     }
 
@@ -251,7 +297,7 @@ async function accept_request_for_new_host(socket, data, emitEvent, joinRoom, em
     const new_host = await getUser({ user_id: data.user_id })
     const connect_new_host = await createLiveHost(
         {
-            peer_id: data.new_host_peer_id,
+            peer_id: data.new_host_peer_id ? data.new_host_peer_id : "",
             user_id: data.user_id
         }
     )
@@ -267,7 +313,7 @@ async function accept_request_for_new_host(socket, data, emitEvent, joinRoom, em
                 last_name: new_host.last_name,
                 user_name: new_host.user_name,
                 profile_pic: new_host.profile_pic,
-                peer_id: data.new_host_peer_id
+                peer_id: data.new_host_peer_id ? data.new_host_peer_id : ""
             },
         })
 
@@ -349,7 +395,7 @@ async function leave_live_as_host(socket, data, emitEvent, leaveRoom, emitToRoom
             last_name: isUser.last_name,
             user_name: isUser.user_name,
             profile_pic: isUser.profile_pic,
-            peer_id: data.peer_id
+            peer_id: data.peer_id ? data.peer_id : ""
         }
     });
     // leaveRoom(socket, data.socket_room_id);
@@ -392,27 +438,45 @@ async function leave_live(socket, data, emitEvent, leaveRoom, emitToRoom) {
             last_name: isUser.last_name,
             user_name: isUser.user_name,
             profile_pic: isUser.profile_pic,
-            peer_id: data.peer_id
+            peer_id: data.peer_id ? data.peer_id : ""
         }
     });
     leaveRoom(socket, data.socket_room_id);
 
 }
 async function activity_on_live(socket, data, emitEvent, emitToRoom) {
+    console.log("activity_on_live: #1");
     const isUser = await getUser({ user_id: socket.authData.user_id });
     if (!isUser) {
         return next(new Error("User not found."));
     }
+    console.log("activity_on_live: #2");
 
     if (!data.like && !data.comment) {
         return emitEvent(socket.id, "activity_on_live", "Data is missing");
     }
-    const already_live = await getLive({ socket_room_id: data.socket_room_id, live_status: "live" });
+    console.log("activity_on_live: #3");
+    let already_live = await getLive({ socket_room_id: data.socket_room_id, live_status: "live" });
+    console.log("activity_on_live: #4");
     let real_time_payload
+    let isAudio = 0;
+    console.log("activity_on_live: #5");
     if (already_live.Records.length <= 0) {
-        return emitEvent(socket.id, "activity_on_live", "Live is closed");
+        console.log("activity_on_live: #6");
+        already_live = await getAudioStream({ socket_stream_room_id: data.socket_room_id, live_status: "live" });
+        console.log("activity_on_live: #7");
+        if (already_live.length <= 0) {
+            console.log("activity_on_live: #8");
+            return emitEvent(socket.id, "activity_on_live", "Live is closed");
+        }
+        else {
+            isAudio = 1;
+            console.log("activity_on_live: #9");
+        }
     }
+    console.log("activity_on_live: #10");
     if (data.like && data.like) {
+        console.log("activity_on_live: #11");
         real_time_payload = {
             like: true,
             comment: false,
@@ -426,17 +490,33 @@ async function activity_on_live(socket, data, emitEvent, emitToRoom) {
             current_like: already_live.Records[0].likes + 1,
             total_comments: already_live.Records[0].comments
         }
-        const update_live = await updateLive(
-            {
-                socket_room_id: data.socket_room_id,
-                live_id: already_live.Records[0].live_id
-            },
-            {
-                likes: already_live.Records[0].likes + 1
-            }
-        );
+        if (isAudio == 1) {
+            console.log("activity_on_live: #12");
+            await updateAudioStream(
+                {
+                    socket_stream_room_id: data.socket_room_id,
+                    stream_id: already_live.Records[0].stream_id
+                },
+                {
+                    likes: already_live.Records[0].likes + 1
+                }
+            );
+        }
+        else {
+            console.log("activity_on_live: #13");
+            const update_live = await updateLive(
+                {
+                    socket_room_id: data.socket_room_id,
+                    live_id: already_live.Records[0].live_id
+                },
+                {
+                    likes: already_live.Records[0].likes + 1
+                }
+            );
+        }
     }
     if (data.comment && data.comment.length > 0) {
+        console.log("activity_on_live: #14");
         real_time_payload = {
             like: false,
             comment: true,
@@ -450,23 +530,42 @@ async function activity_on_live(socket, data, emitEvent, emitToRoom) {
             total_like: already_live.Records[0].like,
             total_comments: already_live.Records[0].comments + 1
         }
-        const update_live = await updateLive(
-            {
-                socket_room_id: data.socket_room_id,
-                live_id: already_live.Records[0].live_id
-            },
-            {
-                comments: already_live.Records[0].comments + 1
-            }
-        );
+
+        if (isAudio == 1) {
+            console.log("activity_on_live: #15");
+            await updateAudioStream(
+                {
+                    socket_stream_room_id: data.socket_room_id,
+                    stream_id: already_live.Records[0].stream_id
+                },
+                {
+                    likes: already_live.Records[0].likes + 1
+                }
+            );
+        }
+        else {
+            console.log("activity_on_live: #16");
+            const update_live = await updateLive(
+                {
+                    socket_room_id: data.socket_room_id,
+                    live_id: already_live.Records[0].live_id
+                },
+                {
+                    comments: already_live.Records[0].comments + 1
+                }
+            );
+        }
     }
+    console.log("activity_on_live: #17", data.socket_room_id, "activity_on_live");
+    console.log(real_time_payload);
     emitToRoom(data.socket_room_id, "activity_on_live", real_time_payload)
 }
 async function get_live(req, res) {
 
     const isUser = await getUser({ user_id: req.authData.user_id });
     const { page = 1, pageSize = 10 } = req.body;
-    const live_status = req.body.live_status || "live";
+    // const live_status = req.body.live_status || "live";
+    const live_status = "live";
     if (!isUser) {
         return generalResponse(
             res,
@@ -484,11 +583,21 @@ async function get_live(req, res) {
     }
 
     const already_live = await getLive(live_filter, { page, pageSize });
+    const stream_live = await getAudioStream(live_filter, { page, pageSize });
 
-    if (already_live.Records.length <= 0) {
+    if (already_live.Records.length <= 0 && stream_live.Records.length <= 0) {
         return generalResponse(
             res,
-            {},
+            {
+                Banner: bannerData,
+                Records: [],
+                Pagination: {
+                    total_pages: 0,
+                    total_records: 0,
+                    current_page: 0,
+                    records_per_page: 0,
+                },
+            },
             "No Live Found",
             true,
             false
@@ -497,16 +606,24 @@ async function get_live(req, res) {
 
     const already_live_with_follow = await Promise.all(
         already_live.Records.map(async (live) => {
+            let is_following_mainhost = 0;
             const updatedHosts = await Promise.all(
                 live.Live_hosts.map(async (hosts) => {
                     const following_true = await isFollow({
                         follower_id: isUser.user_id,
                         user_id: hosts.user_id,
                     });
+                    if (hosts.is_main_host) {
+                        is_following_mainhost = following_true;    // For main host 
+                    }
+                    const follower_count = await countFollows({ user_id: hosts.user_id })
+                    const following_count = await countFollows({ follower_id: hosts.user_id })
 
                     return {
                         ...hosts,
                         following: !!following_true, // simpler boolean cast
+                        follower_count: follower_count,
+                        following_count: following_count,
                     };
                 })
             );
@@ -514,16 +631,63 @@ async function get_live(req, res) {
             return {
                 ...live,
                 Live_hosts: updatedHosts,
+                is_audio: false,             // 
+                is_video: true,
+                is_following: !!is_following_mainhost
             };
         })
     );
 
+    const already_live_with_follow2 = await Promise.all(
+        stream_live.Records.map(async (live) => {
+            let is_following_mainhost = 0;
+            const updatedHosts = await Promise.all(
+                live.Audio_stream_hosts.map(async (hosts) => {
+                    if (hosts.is_main_host) {
+                        is_following_mainhost = hosts.user_id;
+                    }
+                    const following_true = await isFollow({
+                        follower_id: isUser.user_id,
+                        user_id: hosts.user_id,
+                    });
+                    const follower_count = await countFollows({ user_id: hosts.user_id })
+                    const following_count = await countFollows({ follower_id: hosts.user_id })
+                    const gift_details = await getGiftSendingReceivingByUserId(hosts.user_id);
+
+                    return {
+                        ...hosts,
+                        live_host_id: hosts.stream_host_id,
+                        is_live: hosts.is_streaming,
+                        live_id: hosts.stream_id,
+                        following: !!following_true, // simpler boolean cast
+                        follower_count: follower_count,
+                        following_count: following_count,
+                        ...gift_details,
+                    };
+                })
+            );
+
+            return {
+                ...live,
+                live_id: live.stream_id,
+                curent_viewers: live.user_count,
+                likes: 0,
+                socket_room_id: live.socket_stream_room_id,
+                live_title: live.stream_title,
+                Live_hosts: updatedHosts,
+                is_audio: true,             // 
+                is_video: false,
+                is_following: !!is_following_mainhost,
+            };
+        })
+    );
 
     // ✅ Send the response with updated live data
     return generalResponse(
         res,
         {
-            Records: already_live_with_follow,
+            Banner: bannerData,
+            Records: [...already_live_with_follow, ...already_live_with_follow2],
             Pagination: already_live.Pagination
         },
         "Live Found",

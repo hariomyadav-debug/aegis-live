@@ -79,6 +79,15 @@ async function isFollow(followPayload) {
     }
 }
 
+async function countFollows(followCondition) {
+    try {
+        const followCount = await Follow.count({ where: followCondition });
+        return followCount;
+    } catch (error) {
+        console.error('Error in counting follows:', error);
+        throw error;
+    }
+}
 
 
 module.exports = {
@@ -86,5 +95,6 @@ module.exports = {
     createFollow,
     updateFollow,
     deleteFollow,
-    getFollow
+    getFollow,
+    countFollows
 };

@@ -2,7 +2,7 @@ const express = require('express');
 const { signupUser, OtpVerification } = require('../controller/user_controller/auth.controller');
 const { updateProfile } = require('../controller/user_controller/updateProfile.controller');
 const {authMiddleware} = require('../middleware/authMiddleware');
-const { findUser, get_notificationList, update_notificationList, findUser_no_auth, findUser_not_following } = require('../controller/user_controller/User.Controller');
+const { findUser, get_notificationList, update_notificationList, findUser_no_auth, findUser_not_following, getUserDetails } = require('../controller/user_controller/User.Controller');
 const router = express.Router();
 
 // No Auth User Routes
@@ -19,6 +19,10 @@ router.post('/find-user-not-following', findUser_not_following);
 // Notification List
 router.post('/get-notification-list', get_notificationList);
 router.post('/update-notification-list', update_notificationList);
+
+// User details
+router.post('/get-user-details', getUserDetails);
+
 
 // Admin routes
 router.post('')

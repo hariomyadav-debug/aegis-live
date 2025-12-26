@@ -1,11 +1,13 @@
-const { getUsers } = require("../../service/repository/user.service");
+const { getUsers, getUser, getRecommendedUsers } = require("../../service/repository/user.service");
 const { generalResponse } = require("../../helper/response.helper");
 const updateFieldsFilter = require("../../helper/updateField.helper");
 const { getblock } = require("../../service/repository/Block.service");
 const { isFollow, getFollow } = require("../../service/repository/Follow.service");
-const { Follow, User, Sequelize } = require("../../../models");
+const { Follow, Sequelize } = require("../../../models");
 const { getReports } = require("../../service/repository/Report.service");
 const { getNotifications, updateNotification } = require("../../service/repository/notification.service");
+const { showSocials } = require("../social_controller/social.controller");
+require("dotenv").config();
 
 async function findUser(req, res) {
     try {
@@ -533,11 +535,74 @@ async function update_notificationList(req, res) {
 
 }
 
+
+async function getUserDetails(req, res) {
+    try {
+        const currentUserId = req.authData.user_id;
+
+        const recommendedUsers = await getRecommendedUsers(currentUserId, 1);
+
+        const userData = await getUser({user_id: currentUserId});
+
+
+        const structuredData = [
+            {title : "Level", iconUrl :"https://cdn-icons-png.flaticon.com/512/3584/3584344.png", launchUrl: "http://151.243.116.51:3000/level", type: 1},
+            {title : "Daily tasks", iconUrl :"https://www.iconpacks.net/icons/free-icons-6/free-bookmark-yellow-circle-icon-20560-thumb.png", launchUrl: "daily_tasks", type: 1},
+            {title : "Ranking", iconUrl :"https://cdn-icons-png.freepik.com/256/8429/8429708.png?semt=ais_white_label", launchUrl: "ranking", type: 1},
+            {title : "Entries & frames", iconUrl :"https://img.freepik.com/premium-photo/gold-frame-with-red-pink-flower-it3d-avatar-frame-cartoon-photo-border-rendering-game_432516-32302.jpg?w=360", launchUrl: "entries_frames", type: 1},
+            {title : "Backpack", iconUrl :"https://tr.rbxcdn.com/180DAY-c4736a14adc02461144ed1709b1c7dee/420/420/BackAccessory/Png/noFilter", launchUrl: "http://151.243.116.51:3000/backpack", type: 1},
+            {title : "Family center", iconUrl :"https://media.istockphoto.com/id/2163738562/vector/thin-outline-icon-two-hands-holding-or-hugging-group-people-symbol-or-family-line-sign-group.jpg?s=612x612&w=0&k=20&c=nB2qepcgr6BWjL7Y-cZ-1Q91PFKnng9HOZUV-9PFzfg=", launchUrl: "family_center", type: 2},
+            {title : "Winning record", iconUrl :"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQMs8SWnzw2edXhpugdckq1mYr8RgH5-8U4eQ&s", launchUrl: "winning_record", type: 2},
+            {title : "Invitaion rewards", iconUrl :"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSIrHK41OGOEwnRrwtXRH46GDvBNLN0y4xLXA&s", launchUrl: "invitation_rewards", type: 2},
+            {title : "Setting", iconUrl :"https://img.icons8.com/fluent/1200/settings.jpg", launchUrl: "settings", type: 3},
+            {title : "Room Admin", iconUrl :"https://static.thenounproject.com/png/95188-200.png", launchUrl: "room_admin", type: 3},
+            {title : "Help & Feedback", iconUrl :"https://icons.veryicon.com/png/o/application/spanner-app/help-feedback.png", launchUrl: "help_feedback", type: 3},
+        ]
+         const profile_manu = [
+            // {title : "Bank details", iconUrl :"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSg5hmIJwYjTpHQqKB8ytlEqK0V17EpGlTERA&s", launchUrl: "bank_details"},
+            // {title : "Wallet", iconUrl :"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSg5hmIJwYjTpHQqKB8ytlEqK0V17EpGlTERA&s", launchUrl: "wallet"},
+            // {title : "Coin Histroy", iconUrl :"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSg5hmIJwYjTpHQqKB8ytlEqK0V17EpGlTERA&s", launchUrl: "coin_history"},
+            {title : "Post", iconUrl :"https://cdn-icons-png.freepik.com/256/7087/7087136.png?semt=ais_white_label", launchUrl: "post", type: 1},
+            {title : "Earnings", iconUrl :"https://cdn-icons-png.flaticon.com/512/5206/5206272.png", launchUrl: "earnings", type: 1},
+            {title : "Recharge", iconUrl :"https://img.freepik.com/premium-vector/business-finance-icon-vector-illustration_1253044-51259.jpg", launchUrl: "recharge", type: 1},
+            {title : "Messages", iconUrl :"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTH6z2xQRkrrxxGmdzkt129Qjq0SYsgFk5NlA&s", launchUrl: "message", type: 1},
+            {title : "Live Data", iconUrl :"https://img.freepik.com/premium-vector/live-streaming-icon-live-broadcasting-button-online-stream-icon_349999-1413.jpg", launchUrl: "http://151.243.116.51:3000/livedata", type: 1},
+            {title : "Verify", iconUrl :"https://cdn-icons-png.freepik.com/256/18290/18290780.png?semt=ais_white_label", launchUrl: "verify", type: 1},
+            ]
+
+        return generalResponse(
+            res,
+            {
+                data: structuredData,
+                daimond: userData.get("diamond"),
+                recommendedData: recommendedUsers,
+                profile_manu
+            },
+            "Data Found",
+            true,
+            false,
+        );
+
+    } catch (error) {
+        console.error("Error in Finding Details", error);
+        return generalResponse(
+            res,
+            {},
+            "Something went wrong while Finding Details!",
+            false,
+            true
+        );
+    }
+}
+
+
+
 module.exports = {
     findUser,
     findUser_Admin,
     get_notificationList,
     update_notificationList,
     findUser_no_auth,
-    findUser_not_following
+    findUser_not_following,
+    getUserDetails
 };  

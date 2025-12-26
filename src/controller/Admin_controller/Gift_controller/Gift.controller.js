@@ -11,7 +11,7 @@ async function uploadGiftCategory(req, res) {
 
         let allowedUpdateFieldsMandatory = [];
 
-        allowedUpdateFieldsMandatory = ['name']
+        allowedUpdateFieldsMandatory = ['name', 'thumb', 'need_coin', 'score']
         let filteredData;
         try {
             filteredData = updateFieldsFilter(req.body, allowedUpdateFieldsMandatory, true);
@@ -85,7 +85,7 @@ async function showGiftCategory(req, res) {
             );
         }
 
-        filteredData.admin_status=true
+        filteredData.admin_status = true
         if (user_id) {
             filteredData.status = true
         }
@@ -142,7 +142,7 @@ async function showGiftCategory(req, res) {
                 console.error('Error fetching gifts:', error);
             }
         }
-        
+
         return generalResponse(
             res,
             {
@@ -179,7 +179,7 @@ async function edit_Gift_Category(req, res) {
                 true
             );
         }
-        allowedUpdateFields = ['name', 'status','admin_status']
+        allowedUpdateFields = ['name', 'status', 'admin_status']
         let filteredData;
         try {
             filteredData = updateFieldsFilter(req.body, allowedUpdateFields);
@@ -245,14 +245,14 @@ async function uploadGift(req, res) {
                         404
                     );
                 }
-                
+
                 // media_location = req.body.file_media_1
                 filteredData.gift_thumbnail = req.body.file_media_1
             }
             else {
                 filteredData.gift_thumbnail = req.files[0].path
 
-            }    
+            }
 
         }
         catch (err) {
@@ -334,7 +334,7 @@ async function showGift(req, res) {
                 res,
                 { success: false },
                 "Data is Missing",
-                false,  
+                false,
                 true
             );
         }
@@ -348,6 +348,8 @@ async function showGift(req, res) {
             filteredData.status = true
         }
         const gift = await getGift(filteredData, pagination = { page, pageSize }, [], includeOptions);
+
+
 
         // Filter out blocked users
         if (gift?.Records?.length <= 0) {
@@ -364,11 +366,14 @@ async function showGift(req, res) {
             );
         }
 
+        
+       
         return generalResponse(
             res,
             {
                 Records: gift.Records,
                 Pagination: gift.Pagination
+
             },
             "Gift Category Found",
             true,
@@ -394,7 +399,7 @@ async function edit_Gift(req, res) {
 
         let allowedUpdateFields = [];
 
-        allowedUpdateFields = ['status', 'name', 'gift_value','gift_category_id']
+        allowedUpdateFields = ['status', 'name', 'gift_value', 'gift_category_id']
         let filteredData;
         try {
             filteredData = updateFieldsFilter(req.body, allowedUpdateFields, false);
@@ -409,7 +414,7 @@ async function edit_Gift(req, res) {
                 true
             );
         }
-        if(!req.body.gift_id){
+        if (!req.body.gift_id) {
             return generalResponse(
                 res,
                 { success: false },
@@ -419,13 +424,13 @@ async function edit_Gift(req, res) {
             );
         }
 
-   
+
         if (process.env.MEDIAFLOW == "S3") {
             if (req.body.file_media_1) {
                 filteredData.gift_thumbnail = req.body.file_media_1
 
             }
-            
+
             // media_location = req.body.file_media_1
         }
         else {
@@ -443,17 +448,17 @@ async function edit_Gift(req, res) {
                 model: Gift_category
             }
         ]
-        const newGift = await getGift({ gift_id: req.body.gift_id },{},[],includeOptions)
-            return generalResponse(
-                res,
-                newGift,
-                "Gift updated Successfully",
-                true,
-                true
-            );
-        
+        const newGift = await getGift({ gift_id: req.body.gift_id }, {}, [], includeOptions)
+        return generalResponse(
+            res,
+            newGift,
+            "Gift updated Successfully",
+            true,
+            true
+        );
 
-        
+
+
 
     } catch (error) {
         console.error("Error in Deleting Gift ", error);

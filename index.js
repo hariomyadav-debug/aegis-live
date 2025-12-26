@@ -19,6 +19,7 @@ const { Op } = require('sequelize');
 const { getLanguages, createLanguageTranslation } = require("./src/service/repository/Language.service");
 const { default_entries } = require("./src/service/repository/default_entries.service");
 const { likeanalysisadvanced, Like_anaLyzer } = require("./src/controller/like_controller/like.controller");
+const { AccessToken } = require("livekit-server-sdk");
 
 let port = process.env.Port;
 // port = 3001;    
@@ -36,7 +37,7 @@ const io = socketIo(server, {
     cors: {
         origin: true,
     },
-    path: '/socket',
+    path: '/socket', 
 });
 
 app.use(bodyParser.json());
@@ -62,10 +63,62 @@ app.post("/api/validate", Like_anaLyzer);
 
 app.use(express.static(path.join(__dirname, "/admin")));
 
+app.use(express.static(path.join(__dirname, "/frontend")));
+
 app.use("/uploads", express.static("uploads"));
 
 
+app.post('/api/livekit/ll', async (req, res) => {
+  try {
+    const { roomName, userId } = req.body;
+
+    if (!roomName || !userId) {
+      return res.status(400).json({ error: "roomName and userId required" });
+    }
+
+    console.log(process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET, userId, roomName);
+    const token = new AccessToken(
+      process.env.LIVEKIT_API_KEY,
+      process.env.LIVEKIT_API_SECRET,
+      {
+        identity: userId,
+        ttl: "2h",
+      }
+    );
+
+    token.addGrant({
+        room: roomName,
+      roomJoin: true,
+      canPublish: true,
+      canSubscribe: true,
+    });
+    const jwt = await token.toJwt();
+
+    res.json({
+      token: jwt,
+      url: process.env.LIVEKIT_URL,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+})
+
+
 //   Serve Project files
+
+// General route
+app.get("/level", (req, res) => {
+    return res.sendFile(path.join(__dirname, "/frontend", "level.html"));
+});
+app.get("/backpack", (req, res) => {
+    return res.sendFile(path.join(__dirname, "/frontend", "backpack.html"));
+});
+app.get("/games", (req, res) => {
+    return res.sendFile(path.join(__dirname, "/frontend", "games.html"));
+});
+app.get("/livedata", (req, res) => {
+    return res.sendFile(path.join(__dirname, "/frontend", "livedata.html"));
+});
 
 
 // General route
@@ -77,6 +130,7 @@ app.get("/", (req, res) => {
     //     success: true
     // });
 });
+
 
 // Middleware for handling file uploads and parsing request bodies
 
@@ -156,7 +210,7 @@ app.use((req, res, next) => {
 
 app.use("/api", indexRoutes);
 
-app.get("*", (req, res) => {
+app.get("/admin/*", (req, res) => {
     res.sendFile(path.join(__dirname, "admin", "index.html"));
 });
 // Error handling middleware
