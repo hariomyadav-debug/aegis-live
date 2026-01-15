@@ -4,7 +4,7 @@ const { Pk_battles } = require('../../../models');
 const { getLiveLive_host, isHostLive } = require('../../service/repository/Live_host.service');
 const { getUser } = require('../../service/repository/user.service');
 const Live_host = require('../../../models/Live_host');
-const { createPk, getPkByIdWith, getPkResults, getPkById } = require('../../service/repository/Pk.service');
+const { createPk, getPkByIdWith, getPkResults, getPkById, updatePk } = require('../../service/repository/Pk.service');
 const { generalResponse } = require('../../helper/response.helper');
 
 async function startPK(req, res) {
@@ -248,6 +248,53 @@ async function pk_battle_request_response(socket, data, emitEvent, emitToRoom, b
   return;
 }
 
+async function update_pk_score(socket, data, emitEvent, emitToRoom) {
+  const isUser = await getUser({ user_id: socket.authData.user_id });
+
+  if (!isUser) {
+    return next(new Error("User not found."));
+  }
+
+  if (!data.pk_battle_id || !data.is_host1 || !data.host1_live_id || !data.host2_live_id || !data.host1_user_id || !data.host2_user_id) {
+    emitEvent(socket.id, "pk_battle_request", {
+      status: false,
+      message: "host2_user_id is required",
+    });
+    return;
+  }
+
+  try {
+    let updatedPayload = {}
+    if (data.is_host1) {
+      updatedPayload = {
+        host1_score_coins: data?.coins ? data.coins : 0,
+        host1_total_points: data?.total_points ? data.total_points : 0
+      };
+    } else {
+      updatedPayload = {
+        host2_score_coins: data?.coins ? data.coins : 0,
+        host1_total_points: data?.total_points ? data.total_points : 0
+      };
+    }
+    console.log(updatedPayload, data);
+
+    const updated = await updatePk(data.pk_battle_id, updatedPayload);
+    if (!updated) {
+      emitEvent(socket.id, 'update_pk_score', { message: 'Something went wrong to update pk battle.' })
+    }
+
+
+    emitToRoom(updated.host1_socket_room_id, 'update_pk_score', updated);
+    emitToRoom(updated.host2_socket_room_id, 'update_pk_score', updated);
+    return;
+
+  } catch (error) {
+    console.error('Error updating PK score:', error);
+    emitEvent(socket.id, 'update_pk_score', { message: 'Failed to update PK score' })
+  }
+
+}
+
 async function end_pk(socket, data, emitEvent, emitToRoom, broadcastEvent) {
   try {
     const isUser = await getUser({ user_id: socket.authData.user_id });
@@ -288,11 +335,11 @@ async function end_pk(socket, data, emitEvent, emitToRoom, broadcastEvent) {
     let pkResult = await getPkById({ pk_battle_id: pk_battle_id });
     pkResult = pkResult.get({ plain: true })
 
-    if(pkResult){
+    if (pkResult) {
       const host1_socket = await getUser({ user_id: pkResult.host1_user_id });
       const host2_socket = await getUser({ user_id: pkResult.host2_user_id });
-      
-      emitToRoom(pkResult.host1_socket_room_id, "end_pk",  pkResult );
+
+      emitToRoom(pkResult.host1_socket_room_id, "end_pk", pkResult);
       emitToRoom(pkResult.host1_socket_room_id, "live_state_update", pkResult);
       emitToRoom(pkResult.host2_socket_room_id, "live_state_update", pkResult);
       emitEvent(host1_socket.socket_id, "live_state_update", pkResult);
@@ -544,4 +591,5 @@ module.exports = {
   cohost_leave,
   remove_cohost,
   end_pk,
+  update_pk_score
 };

@@ -12,7 +12,7 @@ module.exports = (sequelize, DataTypes) => {
             defaultValue: 0,
             comment: "Start time (timestamp)",
         },
-         stream_title: {
+        stream_title: {
             type: DataTypes.STRING,
             allowNull: false,
             defaultValue: "",
@@ -21,6 +21,17 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.STRING,
             allowNull: false,
             defaultValue: "",
+            get() {
+                const raw_urls = this.getDataValue("thumb");
+                // If the URL is already an S3 URL, return as-is
+                if (raw_urls?.includes(".amazonaws.com/") || raw_urls?.includes(".cloudfront.net/")) {
+                    return raw_urls;
+                }
+                const imageUrls = `${process.env.baseUrl}/${raw_urls}`;
+                return imageUrls != `${process.env.baseUrl}/`
+                    ? imageUrls
+                    : `${process.env.baseUrl}/uploads/not-found-images/profile-image.png`;
+            },
             comment: "Thumbnail image",
         },
         type: {
@@ -29,7 +40,7 @@ module.exports = (sequelize, DataTypes) => {
             defaultValue: 0,
             comment: "Live type",
         },
-        live_status:{
+        live_status: {
             type: DataTypes.STRING,
             allowNull: false,
             defaultValue: "live",
@@ -129,12 +140,12 @@ module.exports = (sequelize, DataTypes) => {
             allowNull: false,
             defaultValue: 0,
         },
-        is_demo:{
+        is_demo: {
             type: DataTypes.BOOLEAN,
             allowNull: false,
             defaultValue: false,
         }
-       
+
     });
     Audio_stream.addHook("beforeCreate", (stream) => {
         stream.seat_map = Array.from({ length: stream.total_seat }, (_, i) => ({

@@ -11,7 +11,8 @@ const commentRoutes = require("./comment.routes")
 const chatRoutes = require("./chat.routes") 
 const productRoutes = require("./product.routes") 
 const musicRoutes = require("./Music.routes") 
-const giftRoutes = require("./gift.routes") 
+const giftRoutes = require("./gift.routes")
+const gameRoutes = require("./game.routes") 
 const transactionRoutes = require("./transaction.routes") 
 const liveRoutes = require("./live.routes") 
 const hashtag_routes = require("./hashtag.routes")
@@ -21,7 +22,9 @@ const avatar_routes= require("./Avatar.routes")
 const language_routes= require("./Language.routes"); 
 const leaderboard_routes= require("./leaderboard.routes"); 
 
-const store_routes = require("./store.routes")
+const store_routes = require("./store.routes");
+const level_routes = require('./level.routes');
+const vip_routes = require('./vip.routes');
 
 const { get_Config } = require("../controller/Admin_controller/ProjectConf.controller");
 const pkRoutes = require("./pk.routes");
@@ -42,6 +45,7 @@ router.use('/ecommerce',productRoutes );
 
 router.use("/music" , musicRoutes)
 router.use("/gift" , giftRoutes)
+router.use("/game" , gameRoutes)
 router.use("/transaction", transactionRoutes)
 router.use("/leader-board", leaderboard_routes)
 router.use("/live", liveRoutes )
@@ -62,5 +66,7 @@ router.get("/project_conf", get_Config)
 
 // New addeding
 router.use('/store', store_routes)
+router.use('/level', level_routes)
+router.use('/vip', vip_routes)
 
 module.exports = router;

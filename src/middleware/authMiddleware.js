@@ -21,7 +21,7 @@ async function authMiddleware(req, res, next) {
   } else {
     if (req.headers.authorization.split(" ")[0] !== "Bearer") {
       return res.status(401).json({ success: false, error: "Invalid token!" });
-    }
+        }
 
     try {
       // check if the token is valid or not
@@ -33,29 +33,29 @@ async function authMiddleware(req, res, next) {
       if (req?.authData?.user_id) {
         
         let isUser = await user_service.getUser({ user_id: req.authData.user_id, is_deleted : false} ,false ,true);
-        if (!isUser) {
-          return generalResponse(res, {}, "No User found", false, true, 401);
-        }
-        req.userData = isUser.toJSON();
-        req.user_type = "user";
+            if (!isUser) {
+                return generalResponse(res, {}, "No User found", false, true, 401);
+            }
+            req.userData = isUser.toJSON();
+            req.user_type = "user";
 
       }
       if (req?.authData?.admin_id) {
         let is_admin = await admin_service.getAdmin({ admin_id: req.authData.admin_id });
-        
+
         if (!is_admin) {
-          return generalResponse(res, {}, "No Admin found", false, true, 401);
-        }
+                return generalResponse(res, {}, "No Admin found", false, true, 401);
+            }
         req.adminData = is_admin.toJSON();
-        req.user_type = "admin";
-      }
+            req.user_type = "admin";
+        }
     } catch (error) {
       console.error(error);
       return res
         .status(401)
         .json({ message: "Invalid token!", success: false });
     }
-  }
+}
   next();
 }
 

@@ -1,6 +1,9 @@
 const { Sequelize, Op } = require('sequelize');
 
 const { User, Follow, Block, Social } = require("../../../models");
+const { getUserLevel } = require('./Level.service');
+const { getUserframe } = require('./Store/Frame.service');
+const { getUserMount } = require('./Store/Mount.service');
 
 
 const getUsers = async (
@@ -126,13 +129,37 @@ async function getUser(userPayload, auth = false, deleted = false) {
                 [Op.or]: orConditions
             }
         });
+
+        if(!isUser){
+            return isUser;
+        }
+
+        // get frame and levels
+        const levelPayload = {
+            level_up: {
+                [Op.lte]: Number(isUser?.consumption ?? 0)
+            }
+        };
+        const attributes = ['id', 'level_id', 'level_name', 'level_up', 'thumb', 'colour', 'thumb_mark', 'bg'];
+
+        const framePayload = {
+            user_id: isUser?.user_id,
+            status: true,
+            end_time: {
+                [Op.gt]: Sequelize.fn('NOW') // active frame
+            }
+        }
+
+        const level = await getUserLevel(levelPayload, attributes);
+        const frame = await getUserframe(framePayload);
+        isUser.setDataValue('level', level);
+        isUser.setDataValue('frame', frame);
         return isUser;
 
     }
     // Perform the query with the "OR" conditions
-
-
 }
+
 
 
 async function createUser(userPayload) {
@@ -296,7 +323,56 @@ async function getAllUsers(userPayload, attributes) {
             where: userPayload,
             attributes: attributes
         });
-        return users;
+        const attributes1 = [
+            'id',
+            'level_id',
+            'level_name',
+            'level_up',
+            'thumb',
+            'colour',
+            'thumb_mark',
+            'bg'
+        ];
+
+        const usersWithLevel = await Promise.all(
+            users.map(async (userInstance) => {
+                const user = userInstance.toJSON(); // getters applied
+
+                const levelPayload = {
+                    level_up: {
+                        [Op.lte]: Number(user.consumption || 0)
+                    }
+                };
+
+                const framePayload = {
+                    user_id: user.user_id,
+                    status: true,
+                    end_time: {
+                        [Op.gt]: Sequelize.fn('NOW') // active frame
+                    }
+                }
+                const mountPayload = {
+                    user_id: user.user_id,
+                    status: true,
+                    end_time: {
+                        [Op.gt]: Sequelize.fn('NOW') // active frame
+                    }
+                }
+
+                const entry = await getUserMount(mountPayload);
+                const frame = await getUserframe(framePayload);
+                const level = await getUserLevel(levelPayload, attributes1);
+
+                // level may be null
+                user.level = level ? level : null;
+                user.frame = frame ? frame : null;
+                user.entry = entry ? entry : null;
+
+                return user;
+            })
+        );
+
+        return usersWithLevel;
     } catch (error) {
         console.error('Error fetching get all Users by sockets:', error);
         throw new Error('Could not retrieve users');

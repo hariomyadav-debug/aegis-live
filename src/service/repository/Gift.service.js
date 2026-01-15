@@ -104,10 +104,24 @@ async function deleteGift(gift_payload) {
     }
 }
 
+async function getOneGift(condition, attributes=[]) {
+    try {
+        const query = {
+            where: condition,
+            attributes
+        }
+        const data = await Gift.findOne(query);
+        return data.toJSON();
+    } catch (error) {
+        console.error('Error get one Gift Category:', error);
+        throw error;
+    }
+}
 
 module.exports = {
     createGift,
     getGift,
     updateGift,
-    deleteGift
+    deleteGift,
+    getOneGift
 }

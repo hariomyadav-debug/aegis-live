@@ -106,6 +106,11 @@ module.exports = (sequelize, DataTypes) => {
     //   allowNull: false,
     //   defaultValue: 0,
     // },
+    consumption: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      defaultValue: 0,
+    },
     profile_pic: {
       type: DataTypes.STRING,
       allowNull: true,
@@ -223,7 +228,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 0
     },
-    diamond:{
+    diamond: {
       type: DataTypes.BIGINT,
       allowNull: false,
       defaultValue: 0

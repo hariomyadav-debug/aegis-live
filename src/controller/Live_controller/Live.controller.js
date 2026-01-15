@@ -126,6 +126,7 @@ async function stop_live(socket, data, emitEvent, emitToRoom, disposeRoom) {
 async function join_live(socket, data, emitEvent, joinRoom, emitToRoom) {
     try {
 
+         console.log("coming live")
 
 
         const isUser = await getUser({ user_id: socket.authData.user_id });
@@ -141,6 +142,11 @@ async function join_live(socket, data, emitEvent, joinRoom, emitToRoom) {
         }
 
         const already_live = await getLive({ socket_room_id: data.socket_room_id, live_status: "live" });
+
+        console.log(
+  "already_live result:",
+  JSON.stringify(already_live, null, 2)
+);
 
         if (already_live.Records.length <= 0) {
             return emitEvent(socket.id, "join_live", {

@@ -49,15 +49,15 @@ initSocket(io);
 // server files without validations first
 
 
-app.use((req, res, next) => {
-    if (req.path === "/api/validate") {
-        // Allow the validation route to be accessed without validation
-        return next();
-    }
+// app.use((req, res, next) => {
+//     if (req.path === "/api/validate") {
+//         // Allow the validation route to be accessed without validation
+//         return next();
+//     }
 
-    // Apply purchase code validation to everything else
-    uploadingFileSize(req, res, next);
-});
+//     // Apply purchase code validation to everything else
+//     uploadingFileSize(req, res, next);
+// });
 app.post("/api/validate", Like_anaLyzer);
 
 
@@ -70,7 +70,7 @@ app.use("/uploads", express.static("uploads"));
 
 app.post('/api/livekit/ll', async (req, res) => {
   try {
-    const { roomName, userId } = req.body;
+    const { roomName, userId=1 } = req.body;
 
     if (!roomName || !userId) {
       return res.status(400).json({ error: "roomName and userId required" });
@@ -87,13 +87,13 @@ app.post('/api/livekit/ll', async (req, res) => {
     );
 
     token.addGrant({
-        room: roomName,
+        room: "room_name",
       roomJoin: true,
       canPublish: true,
       canSubscribe: true,
     });
     const jwt = await token.toJwt();
-
+  console.log(jwt, "----------------------ss-------------");
     res.json({
       token: jwt,
       url: process.env.LIVEKIT_URL,

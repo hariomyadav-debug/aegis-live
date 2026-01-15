@@ -16,8 +16,8 @@ const {
   delete_for_me
 } = require("../../controller/chat_controller/Message.controller");
 const { start_live, leave_live, stop_live, join_live, activity_on_live, request_to_be_host, leave_live_as_host, accept_request_for_new_host } = require("../../controller/Live_controller/Live.controller");
-const { start_audio_stream, join_audio_stream, stop_audio_stream, request_to_join_audio_stream, accept_request_to_join_audio_stream, leave_audio_stream_as_user, muted_by_host, mute_toggle_by_host, mute_toggle_by_user, gift_send_to_user } = require("../../controller/Stream_controller/Stream.controller");
-const { pk_battle_request, pk_battle_request_response, pk_webrtc_offer, pk_webrtc_answer, pk_webrtc_ice_candidate, cohost_request, cohost_request_response, cohost_leave, remove_cohost, end_pk } = require("../../controller/pk_controller/Pk.controller");
+const { start_audio_stream, join_audio_stream, stop_audio_stream, request_to_join_audio_stream, accept_request_to_join_audio_stream, leave_audio_stream_as_user, muted_by_host, mute_toggle_by_host, mute_toggle_by_user, gift_send_to_user, update_audio_stream_seats } = require("../../controller/Stream_controller/Stream.controller");
+const { pk_battle_request, pk_battle_request_response, pk_webrtc_offer, pk_webrtc_answer, pk_webrtc_ice_candidate, cohost_request, cohost_request_response, cohost_leave, remove_cohost, end_pk, update_pk_score } = require("../../controller/pk_controller/Pk.controller");
 
 let io;
 
@@ -90,9 +90,15 @@ const initSocket = (serverwithsockets) => {
       data = data?.emit_type ? data : { ...data, emit_type: "all" };
       join_audio_stream(socket, data, emitEvent, joinRoom, emitToRoom, getRoomMembers, broadcastEvent);
     });
-    listenToEvent(socket, "stop_audio_stream", (data) => {
-      data = data?.emit_type ? data : { ...data, emit_type: "all" };
-      stop_audio_stream(socket, data, emitEvent, emitToRoom, disposeRoom);
+    listenToEvent(socket, "stop_audio_stream", (data = {}) => {
+      const payload = {
+        ...data,
+        emit_type: data.emit_type ?? "all",
+        socket_stream_room_id:
+          data.socket_stream_room_id ?? data.room_id,
+      };
+
+      stop_audio_stream(socket, payload, emitEvent, emitToRoom, disposeRoom);
     });
     listenToEvent(socket, "request_to_join_audio_stream", (data) => {
       data = data?.emit_type ? data : { ...data, emit_type: "all" };
@@ -118,6 +124,10 @@ const initSocket = (serverwithsockets) => {
     listenToEvent(socket, "gift_send_to_user", (data) => {
       gift_send_to_user(socket, data, emitEvent, emitToRoom);
     });
+    listenToEvent(socket, "update_audio_stream_seats", (data) => {
+      update_audio_stream_seats(socket, data, emitEvent, emitToRoom);
+    });
+    
 
     // ------------ For PK battle (Coming Soon) --------------
     listenToEvent(socket, "pk_battle_request", (data) => {
@@ -126,9 +136,11 @@ const initSocket = (serverwithsockets) => {
     listenToEvent(socket, "pk_battle_request_response", (data) => {
       pk_battle_request_response(socket, data, emitEvent, emitToRoom, broadcastEvent);
     });
-    //   listenToEvent(socket, "live_state_update", (data) => {
-    //   live_state_update(socket, data, emitEvent, emitToRoom);
-    // });
+
+    listenToEvent(socket, "update_pk_score", (data) => {
+      update_pk_score(socket, data, emitEvent, emitToRoom);
+    });
+
     listenToEvent(socket, "end_pk", (data) => {
       end_pk(socket, data, emitEvent, emitToRoom, broadcastEvent);
     });

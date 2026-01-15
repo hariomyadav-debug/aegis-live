@@ -18,92 +18,50 @@ const authToken = process.env.TWILIO_AUTH_TOKEN;
 let twilioClient = null
 
 async function sendEmailOTP(email, otp) {
-    // Create a transporter object using SMTP transport
-    let transporter = nodemailer.createTransport({
-        service: `${process.env.EMAIL_SERVICE}`,
-        host: `${process.env.SMTP_HOST}`,//Variable
-        port: Number(process.env.EMAIL_PORT), //Variable
-        secure: true,
-        auth: {
-            user: `${process.env.EMAIL}`, //Variable
-            pass: `${process.env.PASSWORD}` //Variable
-        }
-    });
-    const LoginLinkTemplate = fs.readFileSync(
-        path.resolve(__dirname, "../../../public/emailTemplate.html"),
-        "utf-8"
-    );
-    const settings = await getConfig({ config_id: 1 })
-    let emailContent = LoginLinkTemplate.replaceAll(
-        "{{app_name}}",
-        `${settings.app_name}`
-    );
-    // emailContent = emailContent.replaceAll(
-    //     "{{banner_image}}",
-    //     `${settings[0].banner_image}`
-    // );
-    // emailContent = emailContent.replaceAll(
-    //     "{{website_link}}",
-    //     `${settings[0].website_link}`
-    // );
-    // emailContent = emailContent.replaceAll(
-    //     "{{apk_link}}",
-    //     `${settings[0].android_link}`
-    // );
-    // emailContent = emailContent.replaceAll(
-    //     "{{ios_link}}",
-    //     `${settings[0].ios_link}`
-    // );
-    emailContent = emailContent.replaceAll(
-        "{{generatedOtp}}",
-        `${otp}`
-    );
-    emailContent = emailContent.replaceAll(
-        "{{baseUrl}}",
-        `${process.env.baseUrl}`
-    );
-    emailContent = emailContent.replaceAll(
-        "{{copy_right}}",
-        `${settings.copyright_text}`
-    );
-    // Define email options
-    let mailOptions = {
-        from: `${process.env.EMAIL}`, //Variable
-        to: email,
-        subject: `Your OTP for Verification on ${settings.app_name}`,
-        html: emailContent // Plain text body
-    };
-
     try {
-        // Send email
-        let info = await transporter.sendMail(mailOptions);
-        if (info) {
-            const otpAsInteger = parseInt(otp, 10)
+        const transporter = nodemailer.createTransport({
+            host: "smtp.gmail.com",
+            port: 587,  
+            secure: false, 
+            auth: {
+                user: process.env.EMAIL,
+                pass: process.env.PASSWORD,
+            },
+        });
 
-            try {
-                // Update the profile with new data
-                const otpInDB = await User.update({ otp: otpAsInteger }, { where: { email } });
+        const templatePath = path.resolve(
+            __dirname,
+            "../../../public/emailTemplate.html"
+        );
 
-                if (otpInDB) {
-                    return true //Email sent Successfully
-                }
-                else {
-                    return false //Email not sent Successfully
-                }
+        const LoginLinkTemplate = fs.readFileSync(templatePath, "utf-8");
 
-            } catch (error) {
-                console.error('Error sending OTP:', error);
-                throw error;
-            }
-        }
-        else {
-            return false //Email not sent Successfully
-        }
-    } catch (err) {
-        console.error("Error sending email:", err);
-        return false; // Error occurred while sending email
+        const settings = await getConfig({ config_id: 1 });
+
+        let emailContent = LoginLinkTemplate
+            .replaceAll("{{app_name}}", settings.app_name)
+            .replaceAll("{{generatedOtp}}", otp)
+            .replaceAll("{{baseUrl}}", process.env.baseUrl)
+            .replaceAll("{{copy_right}}", settings.copyright_text);
+
+        const mailOptions = {
+            from: `"${settings.app_name}" <${process.env.EMAIL}>`,
+            to: email,
+            subject: `Your OTP for Verification on ${settings.app_name}`,
+            html: emailContent,
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        console.log("OTP email sent to:", email);
+        return true;
+
+    } catch (error) {
+        console.error("Email OTP failed:", error);
+        return false;
     }
 }
+
 
 async function sendTwilioOTP(country_code, mobile_num, otp) {
     // Create a transporter object using SMTP transport

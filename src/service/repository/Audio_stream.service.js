@@ -1,8 +1,10 @@
 const { Op } = require('sequelize');
-const { Sequelize } = require('sequelize');
+const { Sequelize, fn, col, literal } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
 
-const { Audio_stream, User, Audio_stream_host } = require("../../../models");
+const { Audio_stream, User, Audio_stream_host, Coin_to_coin, Level, Frame_user } = require("../../../models");
+const { getUserLevel } = require('./Level.service');
+const { getUserframe } = require('./Store/Frame.service');
 
 
 async function createAudioStream(streamPayload) {
@@ -84,9 +86,54 @@ async function getAudioStream(streamPayload, pagination = { page: 1, pageSize: 1
         // Use findAndCountAll to get both rows and count
         const { rows, count } = await Audio_stream.findAndCountAll(query);
 
+
+        const attributes = ['id', 'level_id', 'level_name', 'level_up', 'thumb', 'colour', 'thumb_mark', 'bg'];
+
+        // 🔥 Attach level to each user
+        const records = await Promise.all(
+            rows.map(async (row) => {
+                const data = row.toJSON();
+
+                // Audio_stream_hosts is an ARRAY
+                if (
+                    Array.isArray(data.Audio_stream_hosts) &&
+                    data.Audio_stream_hosts.length > 0
+                ) {
+                    data.Audio_stream_hosts = await Promise.all(
+                        data.Audio_stream_hosts.map(async (host) => {
+                            if (host.User) {
+                                const levelPayload = {
+                                    level_up: {
+                                        [Op.lte]: Number(host.User.consumption || 0)
+                                    }
+                                };
+                                const framePayload = {
+                                    user_id: host.User.user_id,
+                                    status: true,
+                                    end_time: {
+                                        [Op.gt]: Sequelize.fn('NOW') // active frame
+                                    }
+                                }
+
+                                const level = await getUserLevel(levelPayload, attributes);
+                                const frame = await getUserframe(framePayload);
+
+                                host.User.level = level || null;
+                                host.User.frame = frame || null;
+                            }
+                            return host;
+                        })
+                    );
+                }
+
+                return data;
+            })
+        );
+
+
         // Prepare the structured response
         return {
-            Records: rows.map(row => row.toJSON()),
+            Records: records,
             Pagination: {
                 total_pages: Math.ceil(count / pageSize),
                 total_records: Number(count),
@@ -271,7 +318,7 @@ async function deleteAudioStream(streamPayload) {
     try {
         // Use the destroy method to delete the records
 
-        const [deletedCount] = await Audio_stream.update({ live_status: "stopped", off_time: Date.now() }, { where: streamPayload });
+        const [deletedCount] = await Audio_stream.update({ live_status: "ended", off_time: Date.now() }, { where: streamPayload });
 
         // Return a structured response
         return {
@@ -297,6 +344,36 @@ async function getAudioSteamCount(streamPayload) {
     }
 }
 
+async function getGiftTotalsByStream(stream_id) {
+    const rows = await Coin_to_coin.findAll({
+        attributes: [
+            "reciever_id",
+            [
+                fn(
+                    "SUM",
+                    literal(`"gift_value" * "quantity"`)
+                ),
+                "gift_value"
+            ]
+        ],
+        where: {
+            social_id: stream_id,
+            transaction_ref: "live",
+            success: "success"
+        },
+        group: ["reciever_id"],
+        raw: true
+    });
+
+    const giftMap = {};
+    rows.forEach(r => {
+        giftMap[r.reciever_id] = Number(r.gift_value) || 0;
+    });
+
+    return giftMap;
+}
+
+
 
 module.exports = {
     createAudioStream,
@@ -304,5 +381,6 @@ module.exports = {
     updateAudioStream,
     getAudioSteamCount,
     deleteAudioStream,
-    getUnifiedStreams
+    getUnifiedStreams,
+    getGiftTotalsByStream
 }
