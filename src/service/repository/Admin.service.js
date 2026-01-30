@@ -71,6 +71,7 @@ async function getAdmin(adminPayload) {
     // }
 
     // Perform the query with the "OR" conditions
+    console.log(adminPayload);
     const isAdmin = await Admin.findOne({
         where: adminPayload
     });

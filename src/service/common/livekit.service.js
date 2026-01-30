@@ -34,7 +34,8 @@ const generateLivekitToken = async (roomName, identity, role) => {
 
         let grants = {
             roomJoin: true,
-            room: roomName,
+            room: "room_name",
+            // room: `${roomName}`,
         };
 
 
@@ -43,8 +44,8 @@ const generateLivekitToken = async (roomName, identity, role) => {
                 ...grants,
                 canPublish: true,
                 canSubscribe: true,
-                canPublishData: true,
-                canUpdateOwnMetadata: true,
+                // canPublishData: true,
+                // canUpdateOwnMetadata: true,
             };
         } else if (role === "viewer") {
             grants = {
@@ -62,12 +63,21 @@ const generateLivekitToken = async (roomName, identity, role) => {
         }
 
         const token = new AccessToken(API_KEY, API_SECRET, {
-            identity,
+            identity: `${identity}`,
+            ttl: "4h",
         });
         token.addGrant(grants);
         const jwt = await token.toJwt();
 
-        return jwt;
+        console.log({
+            token: jwt,
+            url: LIVEKIT_HOST,
+        }, 'ffff----------', API_KEY, API_SECRET, roomName, identity, role, grants);
+
+        return {
+            token: jwt,
+            url: LIVEKIT_HOST,
+        };
 
     } catch (error) {
         console.log('Error to create token: ', err)
@@ -91,17 +101,18 @@ const listParticipants = async (roomName) => {
     return null
 }
 
-const removeParticipants = async (roomName,identity )=>{
-    if(roomService){
+const removeParticipants = async (roomName, identity) => {
+    if (roomService) {
         await roomService.removeParticipant(roomName, identity);
+        return true;
     }
     return null
 }
 
-const deleteParticipants = async (roomName,identity )=>{
-    if(roomService){
-        await roomService.deleteRoom("roomName");
-
+const deleteRoom = async (roomName) => {
+    if (roomService) {
+        await roomService.deleteRoom(roomName);
+        return true;
     }
     return null
 }
@@ -113,5 +124,5 @@ module.exports = {
     roomList,
     listParticipants,
     removeParticipants,
-    deleteParticipants
+    deleteRoom
 }

@@ -9,6 +9,8 @@ const { getNotifications, updateNotification } = require("../../service/reposito
 const { showSocials } = require("../social_controller/social.controller");
 const { Social, Media } = require("../../../models")
 const { structuredData, profile_manu } = require("../../data/home_profile");
+const { emojiData } = require("../../data/emoji.data");
+const { getLevels, getUserLevel } = require("../../service/repository/Level.service");
 require("dotenv").config();
 
 
@@ -302,16 +304,16 @@ async function findUser_not_following(req, res) {
         });
         const includes = [
             {
-                model:Social,
-                include : {
+                model: Social,
+                include: {
                     model: Media,
 
                 },
-                limit:5
+                limit: 5
             }
         ]
         const excludedUserIds = followingUsers.map(f => f.user_id);
-        const isUser = await getUsers(filteredData, pagination, attributes, excludedUserIds, Sequelize.literal('RANDOM()'),includes)
+        const isUser = await getUsers(filteredData, pagination, attributes, excludedUserIds, Sequelize.literal('RANDOM()'), includes)
 
         if (isUser?.Records?.length <= 0) {
 
@@ -545,8 +547,8 @@ async function getUserDetails(req, res) {
 
         const recommendedUsers = await getRecommendedUsers(currentUserId, 1);
 
-        const userData = await getUser({user_id: currentUserId});
-        
+        const userData = await getUser({ user_id: currentUserId });
+
         return generalResponse(
             res,
             {
@@ -572,6 +574,77 @@ async function getUserDetails(req, res) {
     }
 }
 
+async function geteUserEmoji(req, res) {
+    try {
+        const data = emojiData;
+
+        return generalResponse(
+            res,
+            {
+                data
+            },
+            "User emojis",
+            true,
+            true
+        );
+    } catch (error) {
+        console.error("Error in fetching emoji list", error);
+        return generalResponse(
+            res,
+            {},
+            "Something went wrong while fetching emoji list!",
+            false,
+            true
+        );
+
+    }
+}
+
+async function getUserByAuth(req, res) {
+    try {
+        let data = {};
+        const user = await getUser({user_id: req.authData.user_id});
+        if(!user){
+            throw new Error("User not found");
+        }
+        data.user = {
+            name: user.full_name,
+            profile_pic: user.profile_pic,
+            consumption: user.consumption
+        }
+        if(user.level){
+            data.current_level = user.lavel;
+        }else{
+             let level = await getUserLevel({level_id:  1});
+            data.current_level = level;
+        }
+        
+        
+        let next_level = await getUserLevel({level_id: data.current_level.level_id + 1});
+        if(!next_level){
+            next_level = user.lavel;
+        }
+        data.next_level = next_level;
+
+         return generalResponse(
+            res,
+            data,
+            "User details",
+            true,
+            true
+        );
+        
+    } catch (error) {
+         console.error("Error in fetching user data", error);
+        return generalResponse(
+            res,
+            {},
+            "Something went wrong while fetching user data!",
+            false,
+            true
+        );
+    }
+}
 
 
 module.exports = {
@@ -581,5 +654,7 @@ module.exports = {
     update_notificationList,
     findUser_no_auth,
     findUser_not_following,
-    getUserDetails
+    getUserDetails,
+    geteUserEmoji,
+    getUserByAuth
 };  

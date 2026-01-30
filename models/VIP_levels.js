@@ -91,7 +91,7 @@ module.exports = (sequelize, DataTypes) => {
       as: "entryIcon",
       onDelete: "CASCADE",
     });
-
+    
 
     Vip_level.belongsTo(models.Vip_mic_wave, {
       foreignKey: "mic_wave",
@@ -113,5 +113,5 @@ module.exports = (sequelize, DataTypes) => {
     });
   }
 
-  return Vip_level;
-};
+    return Vip_level;
+  };

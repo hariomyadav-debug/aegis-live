@@ -1,6 +1,6 @@
 
 const { createAudioStream, deleteAudioStream, getGiftTotalsByStream } = require("../../service/repository/Audio_stream.service");
-const { createAudioStreamHost, get_audioStreamHost, updateAudioStreamHost } = require("../../service/repository/Audio_stream_host.service");
+const { createAudioStreamHost, get_audioStreamHost, updateAudioStreamHost, isStreamingHost } = require("../../service/repository/Audio_stream_host.service");
 const { getAudioStream, updateAudioStream } = require("../../service/repository/Audio_stream.service");
 const { getUser, getUsers, getAllUsers } = require("../../service/repository/user.service");
 const { generateRoomId } = require("../../service/repository/Live.service");
@@ -12,6 +12,7 @@ const { Sequelize } = require("../../../models");
 const fs = require('fs');
 const path = require('path');
 const { getGift, getOneGift } = require("../../service/repository/Gift.service");
+const { generateLivekitToken, deleteRoom, removeParticipants } = require("../../service/common/livekit.service");
 
 async function start_audio_stream(socket, data, emitEvent, joinRoom) {
     const isUser = await getUser({ user_id: socket.authData.user_id });
@@ -54,7 +55,11 @@ async function start_audio_stream(socket, data, emitEvent, joinRoom) {
     }
 
     const stream_room_id = generateRoomId();
+
     joinRoom(socket, stream_room_id);
+    const livekit_details = await generateLivekitToken(stream_room_id, socket.authData.user_id, 'host');
+
+
     const stream_payload = {
         stream_title: data?.stream_title || "",
         thumb: thumb,
@@ -63,7 +68,8 @@ async function start_audio_stream(socket, data, emitEvent, joinRoom) {
         seat_map: JSON.stringify([])
     }
 
-    const newStream = await createAudioStream(stream_payload)
+    const newStream = await createAudioStream(stream_payload);
+
     if (newStream) {
         const stream_host_payload = {
             user_id: isUser.user_id,
@@ -106,6 +112,7 @@ async function start_audio_stream(socket, data, emitEvent, joinRoom) {
         )
         const new_stream = await getAudioStream({ stream_id: newStream.stream_id })
 
+        emitEvent(socket.id, 'stream_livekit_token_details', livekit_details);
         return emitEvent(socket.id, "start_audio_stream", new_stream, data?.emit_type);
 
     }
@@ -144,6 +151,8 @@ async function stop_audio_stream(socket, data, emitEvent, emitToRoom, disposeRoo
     const delete_live = await deleteAudioStream({ stream_id: already_host.Records[0].stream_id });
 
     if (delete_live) {
+        // Remove from livekit this room
+        // await  deleteRoom(already_host.Records[0].socket_stream_room_id);
         emitToRoom(data.socket_stream_room_id, "audio_stream_stopped", {
             stop_live: true,
             live_host: already_host
@@ -175,7 +184,9 @@ async function join_audio_stream(socket, data, emitEvent, joinRoom, emitToRoom, 
                 is_live: false,
             });
         }
+
         joinRoom(socket, data.socket_stream_room_id);
+        const livekit_details = await generateLivekitToken(data.socket_stream_room_id, socket.authData.user_id, 'viewer');
 
         await updateAudioStream(
             {
@@ -205,9 +216,6 @@ async function join_audio_stream(socket, data, emitEvent, joinRoom, emitToRoom, 
         const giftValueMap = await getGiftTotalsByStream(
             already_audio_stream.Records[0].stream_id
         );
-
-
-
 
         new_stream.Records = await Promise.all(new_stream.Records.map(async (record) => {
             if (Array.isArray(record.Audio_stream_hosts) && record.Audio_stream_hosts.length > 0) {
@@ -248,7 +256,7 @@ async function join_audio_stream(socket, data, emitEvent, joinRoom, emitToRoom, 
         }));
 
 
-
+        emitEvent(socket.id, 'stream_livekit_token_details', livekit_details);
 
         return emitToRoom(data.socket_stream_room_id, "join_audio_stream", new_stream);
 
@@ -267,7 +275,7 @@ async function join_audio_stream(socket, data, emitEvent, joinRoom, emitToRoom, 
 
 }
 
-async function request_to_join_audio_stream(socket, data, emitEvent, joinRoom, emitToRoom) {
+async function request_to_join_audio_stream(socket, data, emitEvent, joinRoom, emitToRoom, getRoomMembers) {
     const isUser = await getUser({ user_id: socket.authData.user_id });
 
     if (!isUser) {
@@ -297,7 +305,7 @@ async function request_to_join_audio_stream(socket, data, emitEvent, joinRoom, e
 
 
     const isAvailable = already_live.Records[0]?.seat_map?.some(
-        seat => ((seat.seat === parseInt(data.seat_number)) && (seat.available === true))
+        seat => ((seat.seat === parseInt(data.seat_number)) && (seat.available === true) && (seat.is_locked === 0))
     ) || false;
 
 
@@ -353,7 +361,7 @@ async function request_to_join_audio_stream(socket, data, emitEvent, joinRoom, e
     )
 }
 
-async function accept_request_to_join_audio_stream(socket, data, emitEvent, joinRoom, emitToRoom) {
+async function accept_request_to_join_audio_stream(socket, data, emitEvent, joinRoom, emitToRoom, joinRoomBySocketId) {
     const isUser = await getUser({ user_id: socket.authData.user_id });
     if (!isUser) {
         return next(new Error("User not found."));
@@ -365,9 +373,7 @@ async function accept_request_to_join_audio_stream(socket, data, emitEvent, join
         return emitEvent(socket.id, "accept_request_to_join_audio_stream", "Data is missing");
     }
 
-
     const already_live = await getAudioStream({ socket_stream_room_id: data.socket_stream_room_id, live_status: "live" });
-
 
     if (already_live.Records.length <= 0) {
         return emitEvent(socket.id, "accept_request_to_join_audio_stream", {
@@ -382,7 +388,7 @@ async function accept_request_to_join_audio_stream(socket, data, emitEvent, join
     }
 
     const isAvailable = already_live.Records[0]?.seat_map?.some(
-        seat => ((seat.seat === parseInt(data.seat_number)) && (seat.available === true))
+        seat => ((seat.seat === parseInt(data.seat_number)) && (seat.available === true) && (seat.is_locked == 0))
     ) || false;
 
     if (!isAvailable) {
@@ -391,8 +397,6 @@ async function accept_request_to_join_audio_stream(socket, data, emitEvent, join
             message: "seat" + data.seat_number + " is not available!"
         });
     }
-    console.log("room id: ", data.socket_stream_room_id);
-    console.log("stream id: ", already_live.Records[0].stream_id)
 
     const new_host = await getUser({ user_id: data.user_id });
 
@@ -406,7 +410,11 @@ async function accept_request_to_join_audio_stream(socket, data, emitEvent, join
         }
     )
 
+    // TODO: check user join room not host
+    // joinRoomBySocketId()
     joinRoom(socket, data.socket_stream_room_id);
+    const livekit_details = await generateLivekitToken(data.socket_stream_room_id, data.user_id, 'speaker');
+
 
     const newSeatMap = already_live.Records[0].seat_map.map(seat =>
         seat.seat === data.seat_number
@@ -451,8 +459,9 @@ async function accept_request_to_join_audio_stream(socket, data, emitEvent, join
         })
 
         const main_streamer = await getUser({ user_id: new_host.user_id })
+        emitEvent(main_streamer.socket_id, 'stream_livekit_token_details', livekit_details);
         emitEvent(main_streamer.socket_id, "activity_on_audio_stream", {
-            message: "New Host Joined",
+            message: "New User Joined",
             User: {
                 user_id: new_host.user_id,
                 full_name: new_host.full_name,
@@ -512,18 +521,17 @@ async function leave_audio_stream_as_user(socket, data, emitEvent, leaveRoom, em
     if (!isUser) {
         return next(new Error("User not found."));
     }
-    console.log("leave_audio_stream_as_user data", data);
 
 
     const already_live = await getAudioStream({ socket_stream_room_id: data.socket_stream_room_id, live_status: "live" });
-
 
     if (already_live.Records.length <= 0) {
         return emitEvent(socket.id, "leave_audio_stream_as_user", "You are not live", data?.emit_type);
     }
 
     const already_host = await get_audioStreamHost({ user_id: isUser.user_id, stream_id: already_live.Records[0].stream_id, is_main_host: false, is_stream: true })
-    if (already_host.Records < 1) {
+    // TODO: check here
+    if ( already_host.Records.length < 1) {
 
         await updateAudioStream(
             {
@@ -551,6 +559,8 @@ async function leave_audio_stream_as_user(socket, data, emitEvent, leaveRoom, em
     }
 
     leaveRoom(socket, data.socket_stream_room_id);
+    // await removeParticipants(data.socket_stream_room_id, data.user_id);
+
     const newSeatMap = already_live.Records[0].seat_map.map(seat =>
         seat.seat === already_host.Records[0].seat_number
             ? { ...seat, available: true }    // seat is now available
@@ -568,7 +578,6 @@ async function leave_audio_stream_as_user(socket, data, emitEvent, leaveRoom, em
         }
     );
 
-    console.log("7");
     await updateAudioStreamHost(
         {
             user_id: isUser.user_id,
@@ -688,12 +697,17 @@ async function gift_send_to_user(socket, data, emitEvent, emitToRoom) {
     }
 
 
-    const attributes = ['name', 'gift_id', 'gift_thumbnail', 'gift_value']
-    const gift = await getOneGift({gift_id: data.gift_id}, attributes);
+    const attributes = ['name', 'gift_id', 'gift_thumbnail', 'gift_animation', 'gift_value']
+    const gift = await getOneGift({ gift_id: data.gift_id }, attributes);
 
-    
+    // get host socekt ID:
+    emitEvent(data, "gift_send_to_user", {
+        data: { ...data, sender_profile_pic: isUser.profile_pic, level: isUser.getDataValue('level'), frame: isUser.getDataValue('frame'), gift },
+        messsage: `Sended by ${data.sender_name}`
+    });
+
     return emitToRoom(data.socket_stream_room_id, "gift_send_to_user", {
-        data: { ...data, sender_profile_pic: isUser.profile_pic, level: isUser.getDataValue('level'), frame: isUser.getDataValue('frame'), gift},
+        data: { ...data, sender_profile_pic: isUser.profile_pic, level: isUser.getDataValue('level'), frame: isUser.getDataValue('frame'), gift },
         messsage: `Sended by ${data.sender_name}`
     })
 }
@@ -756,6 +770,164 @@ async function update_audio_stream_seats(socket, data, emitEvent, emitToRoom) {
 
 }
 
+async function audio_stream_seat_lock_unlock(socket, data, emitEvent, emitToRoom) {
+    const isUser = await getUser({ user_id: socket.authData.user_id });
+    // console.log("mute_toggle_by_user data-------------", data);
+    if (!isUser) {
+        return next(new Error("User not found."));
+    }
+
+
+    if (!data.stream_id || !data.seat_number || !data.socket_stream_room_id) {
+        return emitEvent(socket.id, 'audio_stream_seat_lock_unlock', "data is missing");
+    }
+
+
+    const isHost = await isStreamingHost({ stream_id: data.stream_id, is_main_host: true });
+
+
+    if (!isHost || !isHost.isLive) {
+        return emitEvent(socket.id, 'audio_stream_seat_lock_unlock', { message: isHost?.message || "Invalid request/Stream ended!" });
+    }
+
+    if (isHost.stream_data.user_id != socket.authData.user_id) {
+        return emitEvent(socket.id, 'audio_stream_seat_lock_unlock', { message: "Invalid request/Stream ended!" });
+    }
+
+    console.log(isHost?.stream_data?.Audio_stream)
+    let seatMap = Array.isArray(isHost?.stream_data?.Audio_stream?.seat_map)
+        ? [...isHost.stream_data.Audio_stream.seat_map]
+        : [];
+
+    if (seatMap && seatMap.length) {
+        seatMap = seatMap.map((seat) => {
+            if (seat.seat === data.seat_number) {
+                return ({ ...seat, is_locked: Number(data?.is_locked) })
+            }
+            return seat;
+        });
+    }
+
+
+
+    const { updated_count, message } = await updateAudioStream({ stream_id: data.stream_id }, { seat_map: seatMap });
+    const liveStream = await getAudioStream({ stream_id: data.stream_id });
+
+    if (updated_count > 0) {
+        emitToRoom(data.socket_stream_room_id, 'audio_stream_seat_lock_unlock', { message, liveStream: liveStream?.Records?.[0] })
+        return emitEvent(socket.id, 'audio_stream_seat_lock_unlock', { message, liveStream: liveStream?.Records?.[0] })
+    } else {
+        emitEvent(socket.id, 'audio_stream_seat_lock_unlock', { message, liveStream: null })
+        return emitToRoom(data.socket_stream_room_id, 'audio_stream_seat_lock_unlock', { message, liveStream: null })
+    }
+
+}
+
+
+async function sent_invite_by_host_to_join(socket, data, emitEvent, emitToRoom) {
+    const isHost = await isStreamingHost({ user_id: socket.authData.user_id });
+    console.log(1)
+    if (isHost && !isHost.isLive) {
+        return emitEvent(socket.id, "sent_invite_by_host_to_join", "You are not host");
+    }
+
+    if (!data.socket_stream_room_id || !data.user_id || !data.seat_number) {
+        return emitEvent(socket.id, "sent_invite_by_host_to_join", "Data is missing");
+    }
+
+    const isUser = await getUser({ user_id: data.user_id });
+    // console.log("mute_toggle_by_user data-------------", data);
+    if (!isUser) {
+        return emitEvent(socket.id, "sent_invite_by_host_to_join", "Invalid user");
+    }
+
+    const already_live = await getAudioStream({ socket_stream_room_id: data.socket_stream_room_id, live_status: "live" });
+
+
+    if (already_live.Records.length <= 0) {
+        return emitEvent(socket.id, "sent_invite_by_host_to_join", {
+            is_live: false,
+            message: 'Stream eneded!'
+        });
+    }
+
+    if (already_live.Records.user_count >= already_live.Records.total_seat) {
+        return emitEvent(socket.id, "sent_invite_by_host_to_join", {
+            is_live: false,
+            message: "All seats are reserved!"
+        });
+    }
+
+
+    const isAvailable = already_live.Records[0]?.seat_map?.some(
+        seat => ((seat.seat === parseInt(data.seat_number)) && (seat.available === true) && (seat.is_locked === 0))
+    ) || false;
+
+
+    if (!isAvailable) {
+        return emitEvent(socket.id, "sent_invite_by_host_to_join", {
+            is_live: true,
+            message: "seat" + data.seat_number + " is not available!"
+        });
+    }
+
+
+    emitEvent(socket.id, 'sent_invite_by_host_to_join',
+        {
+            message: "Request send successfully to the user",
+            data: {
+                user_id: isUser.user_id,
+                full_name: isUser.full_name,
+            }
+        }
+    )
+
+    console.log(2)
+    // for 
+    return emitEvent(isUser.socket_id, 'sent_invite_by_host_to_join',
+        {
+            message: "Host invite to join stream",
+            User: {
+                user_id: isUser.user_id,
+                full_name: isUser.full_name,
+                first_name: isUser.first_name,
+                last_name: isUser.last_name,
+                user_name: isUser.user_name,
+                profile_pic: isUser.profile_pic,
+                seat_number: data.seat_number
+            },
+            is_live: true
+
+        }
+    )
+}
+
+
+async function transparent_activity_handler(socket, data, emitEvent, emitToRoom) {
+    if ((!data.socket_room_id && !data.socket_id)) {
+        return emitEvent(socket.id, "transparent_activity_handler", "Data is missing!");
+    }
+
+    if (data.socket_room_id) {
+        emitToRoom(data.socket_room_id, 'transparent_activity_handler',
+            {
+                message: "Updated state!",
+                data: data,
+            }
+        )
+    }
+
+    if (data.socket_room_id) {
+        emitEvent(data.socket_id, 'transparent_activity_handler',
+            {
+                message: "updated state!",
+                data: data,
+            }
+        )
+    }
+
+}
+
 module.exports = {
     start_audio_stream,
     join_audio_stream,
@@ -766,5 +938,8 @@ module.exports = {
     mute_toggle_by_host,
     mute_toggle_by_user,
     gift_send_to_user,
-    update_audio_stream_seats
+    update_audio_stream_seats,
+    audio_stream_seat_lock_unlock,
+    sent_invite_by_host_to_join,
+    transparent_activity_handler
 }

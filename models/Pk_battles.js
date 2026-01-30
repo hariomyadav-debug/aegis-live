@@ -68,9 +68,9 @@ module.exports = (sequelize, DataTypes) => {
             defaultValue: 60,
             validate: {
                 min: 60,
-                max: 180,
+                max: 1200,
             },
-            comment: "Duration must be between 60-180 seconds",
+            comment: "Duration must be between 60-1200 seconds",
         },
         actual_duration: {
             type: DataTypes.INTEGER,

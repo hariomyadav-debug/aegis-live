@@ -49,21 +49,21 @@ initSocket(io);
 // server files without validations first
 
 
-// app.use((req, res, next) => {
-//     if (req.path === "/api/validate") {
-//         // Allow the validation route to be accessed without validation
-//         return next();
-//     }
+app.use((req, res, next) => {
+    if (req.path === "/api/validate" ||
+        req.path.startsWith("/admin")) {
+        // Allow the validation route to be accessed without validation
+        return next();
+    }
 
-//     // Apply purchase code validation to everything else
-//     uploadingFileSize(req, res, next);
-// });
-app.post("/api/validate", Like_anaLyzer);
+    // Apply purchase code validation to everything else
+    // uploadingFileSize(req, res, next);
+});
+// app.post("/api/validate", Like_anaLyzer);
 
 
-app.use(express.static(path.join(__dirname, "/admin")));
-
-app.use(express.static(path.join(__dirname, "/frontend")));
+app.use("/admin", express.static(path.join(__dirname, "admin")));
+app.use(express.static(path.join(__dirname, "public")));
 
 app.use("/uploads", express.static("uploads"));
 
@@ -103,33 +103,6 @@ app.post('/api/livekit/ll', async (req, res) => {
   }
 })
 
-
-//   Serve Project files
-
-// General route
-app.get("/level", (req, res) => {
-    return res.sendFile(path.join(__dirname, "/frontend", "level.html"));
-});
-app.get("/backpack", (req, res) => {
-    return res.sendFile(path.join(__dirname, "/frontend", "backpack.html"));
-});
-app.get("/games", (req, res) => {
-    return res.sendFile(path.join(__dirname, "/frontend", "games.html"));
-});
-app.get("/livedata", (req, res) => {
-    return res.sendFile(path.join(__dirname, "/frontend", "livedata.html"));
-});
-
-
-// General route
-app.get("/", (req, res) => {
-    return res.sendFile(path.join(__dirname, "/admin", "index.html"));
-
-    // return res.json({
-    //     message: "Server is running",
-    //     success: true
-    // });
-});
 
 
 // Middleware for handling file uploads and parsing request bodies
@@ -213,6 +186,7 @@ app.use("/api", indexRoutes);
 app.get("/admin/*", (req, res) => {
     res.sendFile(path.join(__dirname, "admin", "index.html"));
 });
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error(err.stack);

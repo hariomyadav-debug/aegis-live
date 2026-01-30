@@ -1,6 +1,6 @@
 import 'dotenv/config';
 const manu_url = `${process.env.baseUrl}/uploads/home_profiles`;
-const baseUrl_Web = process.env.baseUrl_Web;
+const baseUrl_Web = `${process.env.baseUrl_aapapi}/appapi/pages`;
 
 export const structuredData = [
     { title: "Level", iconUrl: `${manu_url}/level.png`, launchUrl: `${baseUrl_Web}/level`, type: 1 },

@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const { Sequelize } = require('sequelize');
-const { Coin_to_coin,Gift } = require('../../../../models');
+const { Coin_to_coin, Gift, User } = require('../../../../models');
 
 
 
@@ -27,10 +27,10 @@ async function createCoinToCoinTransaction(transaction_payload) {
 
 //         // Initialize the where condition with transaction_payload
 //         let whereCondition = { ...transaction_payload };
-        
+
 //         // Handle transactions where user_id is either sender or receiver
 //         if ( transaction_payload?.all=="true") {
-            
+
 //             delete whereCondition.sender_id; // Remove user_id from the where condition
 //             delete whereCondition.reciever_id; // Remove user_id from the where condition
 //             whereCondition = {
@@ -105,7 +105,7 @@ async function getCoinToCoinTransaction(
         const { page = 1, pageSize = 10 } = pagination;
         const offset = (Number(page) - 1) * Number(pageSize);
         const limit = Number(pageSize);
-        
+
 
         // Initialize the where condition with transaction_payload
         let whereCondition = { ...transaction_payload };
@@ -297,8 +297,56 @@ async function getGiftSendingReceivingByUserId(user_id) {
 }
 
 
+async function getGiftSentGroupedByUser(wherePayload, limit = 0) {
+    const results = await Coin_to_coin.findAll({
+        attributes: [
+            'sender_id',
+            [Sequelize.fn('MAX', Sequelize.col('reciever_id')), 'reciever_id'],
+            [Sequelize.fn('COUNT', Sequelize.col('transaction_id')), 'sent_count'],
+            [Sequelize.fn('COALESCE', Sequelize.fn('SUM', Sequelize.col('quantity')), 0), 'sent_quantity'],
+            [Sequelize.fn('COALESCE', Sequelize.fn('SUM', Sequelize.col('coin')), 0), 'sent_coin'],
+
+            [Sequelize.col('sender.user_id'), 'user_id'],
+            [Sequelize.col('sender.user_name'), 'user_name'],
+            [Sequelize.col('sender.profile_pic'), 'profile_pic']
+        ],
+        include: [
+            {
+                model: User,
+                as: 'sender',
+                attributes: [], // ❗ important: avoid duplicate columns
+                required: true
+            }],
+        where: wherePayload,
+        group: [
+            'sender_id',
+            'sender.user_id',
+            'sender.user_name',
+            'sender.profile_pic'
+        ],
+        order: [[Sequelize.literal('"sent_coin"'), 'DESC']],
+        ...(limit ? { limit: Number(limit) } : {}),
+        raw: true
+    });
+
+    // ✅ No data case
+    if (!results || results.length === 0) {
+        return [];
+    }
+
+    // ✅ add ranking here
+    return results.map((row, index) => ({
+        ...row,
+        ranking: index + 1
+    }));
+}
+
+
+
+
 module.exports = {
     createCoinToCoinTransaction,
     getCoinToCoinTransaction,
     getGiftSendingReceivingByUserId,
+    getGiftSentGroupedByUser,
 }

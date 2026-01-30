@@ -1,6 +1,10 @@
 module.exports = (sequelize, DataTypes) => {
   const Vip_record = sequelize.define("Vip_record", {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    id: { 
+      type: DataTypes.INTEGER, 
+      primaryKey: true, 
+      autoIncrement: true 
+    },
     category: {
       type: DataTypes.ENUM("gift", "recharge", "buy"),
       allowNull: false,

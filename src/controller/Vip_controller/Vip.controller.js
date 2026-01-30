@@ -65,6 +65,9 @@ async function createVip_levelList(req, res) {
 // WP - with pagination
 async function getVip_level_WP(req, res) {
     try {
+
+        const userData = await getUser({user_id: req.authData.user_id});
+
         let includeData = [
             {
                 model: Vip_avatar_icon,
@@ -94,8 +97,9 @@ async function getVip_level_WP(req, res) {
                 model: Vip_poster,
                 as: 'posterIcon'
             }
-        ]
-        let list = await getVip_levelWithPagination({}, includeData);
+        ];
+        let attributes = ['id', 'name', 'icon', 'info_bg', 'bg_image', 'category', 'price_30_days']
+        let list = await getVip_levelWithPagination({}, includeData, attributes);
 
         if (list.Pagination.total_records == 0) {
             return generalResponse(
@@ -116,14 +120,34 @@ async function getVip_level_WP(req, res) {
             );
 
         }
-        // console
-
+        
         let vip_ids = list.Records.map(data => data.id);
         const privileges = await getPrivilagesByVipIds(vip_ids);
+
+
+        //  Get vip record
+         const record_payload = { user_id: req.authData.user_id };
+        let vipRecord = await getVip_record(record_payload);
+        if (vipRecord && vipRecord.length < 1) {
+            vipRecord = null;
+        }else{
+            vipRecord = vipRecord[0];
+        }
+        let recordStatus = 0;
+        if (vipRecord) {
+            const expire =
+                Number(vipRecord.timestamp) +
+                Number(vipRecord.no_of_days) * 86400000;
+            recordStatus = Date.now() < expire ? 1 : 2;
+            console.log(expire, Date.now());
+        }
+
 
         let allowedFields = ['id', 'name', 'icon', 'info_bg', 'bg_image', 'category', 'price_30_days']
         list = list.Records.map(data => ({
             ...updateFieldsFilter(data, allowedFields),
+            is_locked: (parseInt(userData.available_coins) < parseInt(data.price_30_days) ? true: false),
+            is_bought: ((vipRecord.vip_id === data.id && recordStatus === 1) ? true: false),
             props: [data?.avatarIcon && data?.avatarIcon,
             data?.cardIcon && data?.cardIcon,
             data?.entryIcon && data?.entryIcon,
@@ -133,6 +157,7 @@ async function getVip_level_WP(req, res) {
             data?.nobleIcon && data?.nobleIcon
             ].filter(Boolean),
             privileges: privileges?.[data.id] || []
+
         }))
 
         return generalResponse(
@@ -246,7 +271,8 @@ async function deductUserCoins(userCoin, vip_id, days, price, user_id, transacti
     }
 
     const result = await User.update(
-        { coin: sequelize.literal(`coin - ${price}`) },
+        { available_coins: sequelize.literal(`coin - ${price}`) },
+        { consumption: sequelize.literal(`consumption + ${price}`) },
         { where: { id: user_id }, transaction }
     );
 
@@ -281,6 +307,7 @@ async function updateVip(
     user_id,
     recordVipId
 ) {
+
     const affected = await updateVip_record(
         {
             category,
@@ -289,8 +316,9 @@ async function updateVip(
             no_of_days: noOfDays,
             vip_id: vip_id,
         },
-        { where: { id: recordVipId, user_id } }
+        { id: recordVipId, user_id:user_id  }
     );
+
 
     if (affected[0] === 0) {
         return { success: false, message: 'Failed to update SVIP record.' };
@@ -299,7 +327,7 @@ async function updateVip(
     //   await applyVips(timestamp, noOfDays, vip_id, user_id, user_id, vip_cost);
     return {
         success: true,
-        message: `SVIP for ${noOfDays} days acquired successfully.`,
+        message: `SVIP ${vip_id} for ${noOfDays} days acquired successfully.`,
     };
 }
 
@@ -313,9 +341,12 @@ async function upgradeAndInsertVIPFunc(
     note
 ) {
     if (vipRecord) {
+        
         if (vipRecord.vip_id === vipData.id) {
+           
             if (vipRecord.no_of_days === vipData.no_of_days) {
-                return { success: true, message: 'You already acquired this VIP' };
+                
+                return { success: false, message: 'You already acquired this VIP' };
             }
 
             if (vipRecord.no_of_days < vipData.no_of_days) {
@@ -343,7 +374,7 @@ async function upgradeAndInsertVIPFunc(
             }
 
             return {
-                success: true,
+                success: false,
                 message:
                     recordStatus === 1
                         ? 'You already have a Higher VIP.'
@@ -389,7 +420,7 @@ async function upgradeAndInsertVIPFunc(
 
     return {
         success: true,
-        message: `VIP acquired successfully for ${vipData.no_of_days} days.`,
+        message: `VIP ${vipData.id} acquired successfully for ${vipData.no_of_days} days.`,
     };
 }
 
@@ -457,8 +488,7 @@ async function acquire_vip(req, res) {
             );
         }
 
-        console.log(vipData, isUser.available_coins)
-        if(!vipData?.target && (vipData.target > isUser.available_coins)){
+        if (!vipData?.target && (vipData.target > isUser.available_coins)) {
             return generalResponse(
                 res,
                 { success: false },
@@ -472,15 +502,16 @@ async function acquire_vip(req, res) {
         let vipRecord = await getVip_record(record_payload);
         if (vipRecord && vipRecord.length < 1) {
             vipRecord = null;
+        }else{
+            vipRecord = vipRecord[0];
         }
         let recordStatus = 0;
         if (vipRecord) {
             const expire =
-                new Date(vipRecord.timestamp).getTime() +
-                vipRecord.no_of_days * 86400000;
+                Number(vipRecord.timestamp) +
+                Number(vipRecord.no_of_days) * 86400000;
             recordStatus = Date.now() < expire ? 1 : 2;
         }
-        console.log(vipRecord);
 
         const result = await upgradeAndInsertVIPFunc(
             vipRecord,
@@ -491,15 +522,29 @@ async function acquire_vip(req, res) {
             "note"
         );
 
+        if (result && result?.data?.success) {
+            return generalResponse(
+                res,
+                result,
+                result?.message,
+                true,
+                true,
+                200
+            );
 
-        return generalResponse(
-            res,
-            result,
-            "List found",
-            true,
-            false,
-            200
-        );
+        } else {
+            return generalResponse(
+                res,
+                result,
+                result?.message,
+                true,
+                false,
+                200
+            );
+
+        }
+
+
 
     } catch (error) {
         console.error("Error in buy vip", error);

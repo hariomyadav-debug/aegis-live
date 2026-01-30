@@ -27,6 +27,22 @@ module.exports = (sequelize, DataTypes) => {
                 return fullUrl;
             },
         },
+        gift_animation: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            defaultValue: "",
+            get() {
+                let rawUrl = this.getDataValue("gift_animation");
+                if (rawUrl?.includes("amazonaws.com") || rawUrl?.includes("cloudfront.net") ) {
+                    return rawUrl
+                }
+                let fullUrl =
+                    // process.env.baseUrl + ":" + process.env.Port + "/" + rawUrl;
+                    process.env.baseUrl + "/" + rawUrl;
+                fullUrl == process.env.baseUrl ? "" : fullUrl;
+                return fullUrl;
+            },
+        },
         gift_value: {
             type: DataTypes.INTEGER,
             allowNull: false,

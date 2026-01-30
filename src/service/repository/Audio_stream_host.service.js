@@ -2,7 +2,7 @@ const { Op } = require('sequelize');
 const { Sequelize } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
 
-const { Audio_stream_host, User } = require("../../../models");
+const { Audio_stream_host, User, Audio_stream } = require("../../../models");
 
 
 async function createAudioStreamHost(streamPayload) {
@@ -109,8 +109,45 @@ async function updateAudioStreamHost(streamPayload, updateData, excludedUserIds 
 }
 
 
+async function isStreamingHost(hostPlayload={},  livePlayload={live_status: "live"}) {
+  
+  try {
+    const hostLive = await Audio_stream_host.findOne({
+      where: hostPlayload,
+      include: [
+        {
+          model: Audio_stream,
+          where: livePlayload,
+        },
+      ],
+    });
+   
+
+    if (!hostLive) {
+      return {
+        isLive: false,
+        live_id: null,
+        message: "Host is not currently live",
+      };
+    }
+
+    return {
+      isLive: true,
+      stream_id: hostLive.stream_id,
+      stream_data: hostLive,
+    };
+  } catch (err) {
+    console.error("Get is host audio stream  Error:", err);
+    return { isLive: false, live_id: null, message: "Something went wrong!", };
+  }
+}
+
+
+
+
 module.exports = {
     createAudioStreamHost,
     get_audioStreamHost,
     updateAudioStreamHost,
+    isStreamingHost,
 }

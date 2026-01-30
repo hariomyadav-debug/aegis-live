@@ -30,8 +30,13 @@ module.exports = (sequelize, DataTypes) => {
         transaction_ref:{
             type: DataTypes.STRING,
             allowNull: false,
-            defaultValue: "",  // live , social 
-        }
+            defaultValue: "",  // live , social pk
+        },
+        transaction_ref_id:{
+            type: DataTypes.STRING,
+            allowNull: false,
+            defaultValue: "0",  // live , social , pk
+        },
     });
     Coin_to_coin.associate = function (models) {
         Coin_to_coin.belongsTo(models.User, {

@@ -51,7 +51,7 @@ async function getGift(gift_payload, pagination = { page: 1, pageSize: 10 }, exc
 
         const records = rows.map(gift => ({
             ...gift.toJSON(),
-            gift_animation:`${process.env.baseUrl}/uploads/gif/coin_send.svga`,
+            // gift_animation:`${process.env.baseUrl}/uploads/gif/coin_send.svga`,
             animation_type: 'svga',
 
         }));

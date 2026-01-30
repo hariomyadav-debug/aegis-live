@@ -150,7 +150,8 @@ module.exports = (sequelize, DataTypes) => {
     Audio_stream.addHook("beforeCreate", (stream) => {
         stream.seat_map = Array.from({ length: stream.total_seat }, (_, i) => ({
             seat: i + 1,
-            available: i !== 0
+            available: i !== 0,
+            is_locked: 0
         }));
     });
 

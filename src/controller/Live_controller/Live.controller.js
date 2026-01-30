@@ -1,6 +1,8 @@
 
+
 const {
-    getUser
+    getUser,
+    getAllUsers
 } = require("../../service/repository/user.service");
 
 const { createLive, generateRoomId, getLive, deleteLive, updateLive } = require("../../service/repository/Live.service");
@@ -10,9 +12,13 @@ const { sendPushNotification } = require("../../service/common/onesignal.service
 const { createLiveHost, getLiveLive_host } = require("../../service/repository/Live_host.service");
 const { getAudioStream, updateAudioStream } = require("../../service/repository/Audio_stream.service");
 const { getGiftSendingReceivingByUserId } = require("../../service/repository/Transactions/Coin_coin_transaction.service");
-const bannerData = require("../../data/banner.data");
+const { bannerData, topIcons } = require("../../data/banner.data.js");
 const { getPkByIdWith, getPkById } = require("../../service/repository/Pk.service");
 const { Op } = require("sequelize");
+const { redis } = require("../../helper/redis");
+const { topSendersList, topReceiversList } = require("../leaderboard_controller/top_users.controller");
+const { generateLivekitToken, deleteRoom, removeParticipants } = require("../../service/common/livekit.service.js");
+const { top_ranking_pk_sender } = require("../../helper/pkSocket.helper.js");
 
 async function start_live(socket, data, emitEvent, joinRoom) {
 
@@ -27,13 +33,12 @@ async function start_live(socket, data, emitEvent, joinRoom) {
     // }
     const room_id = generateRoomId();
     joinRoom(socket, room_id);
+    const livekit_details = await generateLivekitToken(room_id, socket.authData.user_id, 'host');
+
     const live_payload = {
         live_title: data.live_title,
         socket_room_id: room_id,
     }
-
-
-
 
     const newLive = await createLive(live_payload)
     if (newLive) {
@@ -83,6 +88,7 @@ async function start_live(socket, data, emitEvent, joinRoom) {
             }
         )
         const new_live = await getLive({ live_id: newLive.live_id })
+        emitEvent(socket.id, 'live_livekit_token_details', livekit_details);
         return emitEvent(socket.id, "start_live", new_live);
     }
 
@@ -111,6 +117,7 @@ async function stop_live(socket, data, emitEvent, emitToRoom, disposeRoom) {
     const delete_live = await deleteLive({ live_id: already_host.Records[0].live_id });
 
     if (delete_live) {
+        // await  deleteRoom(already_host.Records[0].socket_room_id);
         emitToRoom(data.socket_room_id, "stop_live", {
             stop_live: true,
             live_host: already_host,
@@ -123,12 +130,39 @@ async function stop_live(socket, data, emitEvent, emitToRoom, disposeRoom) {
     return emitEvent(socket.id, "stop_live", "Failed to leave live");
 
 }
-async function join_live(socket, data, emitEvent, joinRoom, emitToRoom) {
+
+async function checkPkandUpdate(socket, data, emitEvent) {
+    const pk = await getPkById({
+        [Op.or]: [
+            { host1_socket_room_id: data.socket_room_id },
+            { host2_socket_room_id: data.socket_room_id }
+        ],
+        battle_status: "active"
+    });
+
+    if (pk) {
+        const redisKey = `pk:timer:${pk.pk_battle_id}`;
+        const timer = await redis.hgetall(redisKey);
+
+        if (timer.startTime) {
+            const elapsed = Date.now() - Number(timer.startTime);
+            const remaining = Math.max(
+                Math.ceil((Number(timer.duration) - elapsed) / 1000),
+                0
+            );
+
+            emitEvent(socket.id, "pk_timer_update", {
+                pk_battle_id: pk.pk_battle_id,
+                remaining
+            });
+
+            emitEvent(socket.id, "live_state_update", pk);
+        }
+    }
+}
+
+async function join_live(socket, data, emitEvent, joinRoom, emitToRoom, getRoomMembers) {
     try {
-
-         console.log("coming live")
-
-
         const isUser = await getUser({ user_id: socket.authData.user_id });
         if (!isUser) {
             return next(new Error("User not found."));
@@ -143,17 +177,13 @@ async function join_live(socket, data, emitEvent, joinRoom, emitToRoom) {
 
         const already_live = await getLive({ socket_room_id: data.socket_room_id, live_status: "live" });
 
-        console.log(
-  "already_live result:",
-  JSON.stringify(already_live, null, 2)
-);
-
         if (already_live.Records.length <= 0) {
             return emitEvent(socket.id, "join_live", {
                 is_live: false,
             });
         }
         joinRoom(socket, data.socket_room_id);
+        const livekit_details = await generateLivekitToken(data.socket_room_id, socket.authData.user_id, 'viewer');
 
         await updateLive(
             {
@@ -166,7 +196,9 @@ async function join_live(socket, data, emitEvent, joinRoom, emitToRoom) {
             }
         );
 
-        
+
+        emitEvent(socket.id, 'live_livekit_token_details', livekit_details);
+        console.log("join_live------------", await getRoomMembers(data.socket_room_id))
         emitToRoom(data.socket_room_id, "join_live", {
             total_viewers: already_live.Records[0].total_viewers + 1,
             curent_viewers: already_live.Records[0].curent_viewers + 1,
@@ -184,6 +216,10 @@ async function join_live(socket, data, emitEvent, joinRoom, emitToRoom) {
             // streamer_id: already_live.Records[0].user_id,
             is_live: true
         });
+
+        await checkPkandUpdate(socket, data, emitEvent);
+        await top_ranking_pk_sender(socket, data, emitEvent, emitToRoom)
+
 
         //  For PK Update
         let main_host_user_id = 0;
@@ -213,9 +249,7 @@ async function join_live(socket, data, emitEvent, joinRoom, emitToRoom) {
     }
     catch (error) {
         console.log("error in join live", error);
-
         return emitEvent(socket.id, "join_live", error);
-
     }
 
 }
@@ -310,6 +344,10 @@ async function accept_request_for_new_host(socket, data, emitEvent, joinRoom, em
     if (
         connect_new_host
     ) {
+        const livekit_details = await generateLivekitToken(data.socket_room_id, data.user_id, 'speaker');
+
+        emitEvent(new_host.socket_id, 'live_livekit_token_details', livekit_details);
+
         emitToRoom(data.socket_room_id, "activity_on_live", {
             message: "New Host Joined",
             User: {
@@ -390,6 +428,7 @@ async function leave_live_as_host(socket, data, emitEvent, leaveRoom, emitToRoom
     //         }
     //     );
     // }
+    // await removeParticipants(data.socket_room_id, socket.authData.user_id);
 
     emitToRoom(data.socket_room_id, "leave_live_as_host", {
         // total_viewers: already_live.Records[0].total_viewers,
@@ -432,7 +471,7 @@ async function leave_live(socket, data, emitEvent, leaveRoom, emitToRoom) {
             }
         );
     }
-
+    // await removeParticipants(data.socket_room_id, socket.authData.user_id);
 
     emitToRoom(data.socket_room_id, "leave_live", {
         total_viewers: already_live.Records[0].total_viewers,
@@ -591,11 +630,17 @@ async function get_live(req, res) {
     const already_live = await getLive(live_filter, { page, pageSize });
     const stream_live = await getAudioStream(live_filter, { page, pageSize });
 
+    const senderData = await topSendersList("", req.authData.user_id, 2);
+    const receiverData = await topReceiversList("", req.authData.user_id, 2);
+
     if (already_live.Records.length <= 0 && stream_live.Records.length <= 0) {
         return generalResponse(
             res,
             {
                 Banner: bannerData,
+                topSender: senderData || [],
+                topReceiver: receiverData || [],
+                topIcons: topIcons || [],
                 Records: [],
                 Pagination: {
                     total_pages: 0,
@@ -693,6 +738,9 @@ async function get_live(req, res) {
         res,
         {
             Banner: bannerData,
+            topSender: senderData,
+            topReceiver: receiverData,
+            topIcons: topIcons,
             Records: [...already_live_with_follow, ...already_live_with_follow2],
             Pagination: already_live.Pagination
         },
@@ -730,6 +778,7 @@ async function get_live_admin(req, res) {
         true
     );
 }
+
 
 
 module.exports = {

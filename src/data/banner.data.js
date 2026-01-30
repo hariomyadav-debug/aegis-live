@@ -25,5 +25,15 @@
         }
     ];
 
+    const topIcons = [
+        {
+            name: "1",
+            image: `${process.env.baseUrl}/uploads/not-found-images/profile-image.png`,
+        },
+        {
+            name: "2",
+            image: `${process.env.baseUrl}/uploads/not-found-images/profile-image.png`,
+        }
+    ]
 
-    module.exports = bannerData;
+    module.exports = {bannerData, topIcons};

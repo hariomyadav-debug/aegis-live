@@ -319,6 +319,7 @@ async function uploadGift(req, res) {
 }
 
 async function showGift(req, res) {
+    
     try {
         const user_id = req.authData.user_id
         const { page = 1, pageSize = 10 } = req.body

@@ -610,6 +610,7 @@ async function Coin_to_Coin(req, res) {
         try {
             filteredData = updateFieldsFilter(req.body, allowedUpdateFields, false);
             filteredData.sender_id = user_id
+            filteredData.transaction_ref_id = req.body?.transaction_ref_id || 0;      // for handle id of pk, live, stream etc
         }
         catch (err) {
             console.log(err);
@@ -673,6 +674,7 @@ async function Coin_to_Coin(req, res) {
 
                 const gift_value = Number(gift.Records[0].gift_value)
                 const sender_coin = Number(is_user.toJSON().available_coins)
+                const sender_consumption = Number(is_user.toJSON().consumption)
                 filteredData.gift_value = gift_value
                 filteredData.coin = gift_value * Number(filteredData.quantity)
                 if (sender_coin < filteredData.coin) {
@@ -687,7 +689,8 @@ async function Coin_to_Coin(req, res) {
                     );
                 }
 
-                const updated_sender = await updateUser({ available_coins: sender_coin - filteredData.coin }, { user_id: is_user.toJSON().user_id })
+                //   User send gift to another user then reduce coins and add consumption 
+                const updated_sender = await updateUser({ available_coins: sender_coin - filteredData.coin, consumption: sender_consumption + filteredData.coin }, { user_id: is_user.toJSON().user_id })
                 if (updated_sender.length > 0) {
                     const updated_reciver = await updateUser({ available_coins: Number(reciever.toJSON().available_coins) + filteredData.coin }, { user_id: reciever.toJSON().user_id })
                     if (updated_reciver.length > 0) {

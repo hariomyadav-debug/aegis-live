@@ -6,6 +6,12 @@ const { getUser } = require('../../service/repository/user.service');
 const Live_host = require('../../../models/Live_host');
 const { createPk, getPkByIdWith, getPkResults, getPkById, updatePk } = require('../../service/repository/Pk.service');
 const { generalResponse } = require('../../helper/response.helper');
+const { getOneGift } = require('../../service/repository/Gift.service');
+// const { emitToRoomFromApi } = require('../../service/common/socket.service');
+const servive = require('../../service/repository/Transactions/Coin_coin_transaction.service');
+const { redis } = require('../../helper/redis');
+const { top_ranking_pk_sender } = require('../../helper/pkSocket.helper');
+require('dotenv').config();
 
 async function startPK(req, res) {
   try {
@@ -77,6 +83,11 @@ async function endPK(req, res) {
     battle.time_remaining = 0; // optional update
 
     await battle.save();
+
+    // emitToRoomFromApi(battle.host1_socket_room_id, "end_pk", battle);
+    // emitToRoomFromApi(battle.host2_socket_room_id, "end_pk", battle);
+    // emitToRoom(battle.host1_socket_room_id, "live_state_update", battle);
+    // emitToRoom(battle.host2_socket_room_id, "live_state_update", battle);
 
     return generalResponse(res, battle, "PK battle successfully ended", true, true, 200);
   } catch (err) {
@@ -229,15 +240,27 @@ async function pk_battle_request_response(socket, data, emitEvent, emitToRoom, b
 
 
 
+  // 🔥 REDIS TIMER SAVE ---------------------
+  const redisKey = `pk:timer:${pkDetails.pk_battle_id}`;
+
+  await redis.hset(redisKey, {
+    startTime: Date.now(),
+    duration: pkDetails.battle_duration * 1000,
+    host1_room: pkDetails.host1_socket_room_id,
+    host2_room: pkDetails.host2_socket_room_id
+  });
+
+  await redis.pexpire(redisKey, pkDetails.battle_duration * 1000);
+
   emitToRoom(data.host1_socket_room_id, "start_pk", pkDetails);
   emitToRoom(data.host2_socket_room_id, "start_pk", pkDetails);
-  emitEvent(main_streamer.socket_id, 'start_pk', pkDetails);
-  emitEvent(socket.id, 'start_pk', pkDetails);
+  // emitEvent(main_streamer.socket_id, 'start_pk', pkDetails);
+  // emitEvent(socket.id, 'start_pk', pkDetails);
 
   emitToRoom(data.host1_socket_room_id, "live_state_update", pkDetails);
   emitToRoom(data.host2_socket_room_id, "live_state_update", pkDetails);
-  emitEvent(main_streamer.socket_id, 'live_state_update', pkDetails);
-  emitEvent(socket.id, 'live_state_update', pkDetails);
+  // emitEvent(main_streamer.socket_id, 'live_state_update', pkDetails);
+  // emitEvent(socket.id, 'live_state_update', pkDetails);
 
   emitEvent(main_streamer.socket_id, "pk_battle_request_response", {
     status: true,
@@ -286,6 +309,7 @@ async function update_pk_score(socket, data, emitEvent, emitToRoom) {
 
     emitToRoom(updated.host1_socket_room_id, 'update_pk_score', updated);
     emitToRoom(updated.host2_socket_room_id, 'update_pk_score', updated);
+    await top_ranking_pk_sender(socket, data, emitEvent, emitToRoom)
     return;
 
   } catch (error) {
@@ -295,13 +319,14 @@ async function update_pk_score(socket, data, emitEvent, emitToRoom) {
 
 }
 
-async function end_pk(socket, data, emitEvent, emitToRoom, broadcastEvent) {
+async function end_pk(socket, data, emitEvent, emitToRoom, getRoomMembers) {
   try {
-    const isUser = await getUser({ user_id: socket.authData.user_id });
-    if (!isUser) {
-      return next(new Error("User not found."));
-    }
+    // const isUser = await getUser({ user_id: socket.authData.user_id });
+    // if (!isUser) {
+    //   return next(new Error("User not found."));
+    // }
     const { pk_battle_id } = data;
+
     if (!pk_battle_id) {
       emitEvent(socket.id, "end_pk", {
         status: false,
@@ -318,11 +343,19 @@ async function end_pk(socket, data, emitEvent, emitToRoom, broadcastEvent) {
       });
       return;
     }
+
+    let winner = {};
+    let looser = {};
     if (pkBattles.battle_status !== "ended") {
       if (pkBattles.host1_total_points > pkBattles.host2_total_points) {
         pkBattles.winner = "host1";
+        winner.score = `${process.env.baseUrl_aapapi}uploads/appapi/pk/defeat.png`
+        winner.name = `${process.env.baseUrl_aapapi}uploads/appapi/pk/defeat.png`
+        winner.avatar = `${process.env.baseUrl_aapapi}uploads/appapi/pk/defeat.png`
+        winner.url = `${process.env.baseUrl_aapapi}uploads/appapi/pk/defeat.png`
       } else if (pkBattles.host2_total_points > pkBattles.host1_total_points) {
         pkBattles.winner = "host2";
+        winner.url = `${process.env.baseUrl_aapapi}uploads/appapi/pk/victory.png`
       } else {
         pkBattles.winner = "draw";
       }
@@ -333,23 +366,36 @@ async function end_pk(socket, data, emitEvent, emitToRoom, broadcastEvent) {
 
     // const pkResult = await getPkResults(pk_battle_id);    // when Pk_battles_results is needed
     let pkResult = await getPkById({ pk_battle_id: pk_battle_id });
-    pkResult = pkResult.get({ plain: true })
+    pkResult = pkResult.get({ plain: true });
+
+
+    // 🔥 CLEAR REDIS TIMER
+    await redis.del(`pk:timer:${pk_battle_id}`);
 
     if (pkResult) {
-      const host1_socket = await getUser({ user_id: pkResult.host1_user_id });
-      const host2_socket = await getUser({ user_id: pkResult.host2_user_id });
-
-      emitToRoom(pkResult.host1_socket_room_id, "end_pk", pkResult);
-      emitToRoom(pkResult.host1_socket_room_id, "live_state_update", pkResult);
-      emitToRoom(pkResult.host2_socket_room_id, "live_state_update", pkResult);
-      emitEvent(host1_socket.socket_id, "live_state_update", pkResult);
-      emitEvent(host2_socket.socket_id, "live_state_update", pkResult);
+      // const host1_socket = await getUser({ user_id: pkResult.host1_user_id });
+      // const host2_socket = await getUser({ user_id: pkResult.host2_user_id });
+    
+      emitToRoom(pkResult.host1_socket_room_id, "end_pk", {
+        status: true,
+        message: "PK battle successfully ended",
+        pkResult
+      });
+      emitToRoom(pkResult.host2_socket_room_id, "end_pk", {
+        status: true,
+        message: "PK battle successfully ended",
+        pkResult
+      });
+      // emitToRoom(pkResult.host1_socket_room_id, "live_state_update", pkResult);
+      // emitToRoom(pkResult.host2_socket_room_id, "live_state_update", pkResult);
+      // emitEvent(host1_socket.socket_id, "live_state_update", pkResult);
+      // emitEvent(host2_socket.socket_id, "live_state_update", pkResult);
     }
 
-    emitEvent(socket.id, "end_pk", {
-      status: true,
-      message: "PK battle successfully ended",
-    });
+    // emitEvent(socket.id, "end_pk", {
+    //   status: true,
+    //   message: "PK battle successfully ended",
+    // });
   }
 
   catch (err) {
@@ -452,6 +498,121 @@ async function pk_webrtc_ice_candidate(socket, data, emitEvent) {
   }
 }
 
+
+async function pk_gift_sending_to_host(socket, data, emitEvent, emitToRoom, getRoomMembers) {
+
+  if (!data.pk_battle_id || !data.receiver_id || !data.sender_id || !data.gift_id || !data.gift_count) {
+    return emitEvent(socket.id, 'pk_gift_sending_to_host', "data is missing");
+  }
+
+  try {
+    const isUser = await getUser({ user_id: data.sender_id });
+    const isReciever = await getUser({ user_id: data.receiver_id });
+    if (!isUser || !isReciever) {
+      return next(new Error("Sender ID not found."));
+    }
+
+
+    const attributes = ['name', 'gift_id', 'gift_thumbnail', 'gift_animation', 'gift_value']
+    const gift = await getOneGift({ gift_id: data.gift_id }, attributes);
+
+    // get host socekt ID:
+    let pk_battle = await getPkById({ pk_battle_id: data.pk_battle_id });
+    if (!pk_battle) {
+      emitEvent(socket.id, "pk_gift_sending_to_host", { data: null, message: 'Pk not found!' })
+    }
+
+    let updatePayload = {
+      host1_score_coins: pk_battle.host1_score_coins,
+      host1_total_points: pk_battle.host1_score_coins
+    }
+
+    
+    if (pk_battle.host1_user_id === data.receiver_id) {
+      updatePayload = {
+        host1_score_coins: updatePayload.host1_score_coins + parseInt(data.gift_count) * parseInt(gift.gift_value),
+        host1_total_points: updatePayload.host1_score_coins + parseInt(data.gift_count) * parseInt(gift.gift_value)
+      }
+    } else if (pk_battle.host2_user_id === data.receiver_id) {
+      updatePayload = {
+        host2_score_coins: updatePayload.host2_score_coins + parseInt(data.gift_count) * parseInt(gift.gift_value),
+        host2_total_points: updatePayload.host2_score_coins + parseInt(data.gift_count) * parseInt(gift.gift_value)
+      }
+    }
+    console.log(updatePayload, "--------------------------0000------------------------0000", data.receiver_id, 'fff', data.sender_id);
+
+    const updated = await updatePk(pk_battle.pk_battle_id, updatePayload);
+
+    const sendersData = await servive.getGiftSentGroupedByUser({
+      transaction_ref: "pk",
+      transaction_ref_id: data.pk_battle_id
+    })
+
+    pk_battle = await getPkById({ pk_battle_id: pk_battle.pk_battle_id });
+
+
+    emitToRoom(pk_battle.host2_socket_room_id, 'update_pk_score', pk_battle);
+    emitToRoom(pk_battle.host1_socket_room_id, 'update_pk_score', pk_battle);
+
+    if (pk_battle.host1_user_id === data.receiver_id) {
+      emitToRoom(pk_battle.host1_socket_room_id, "pk_gift_sending_to_host", {
+        data: {
+          ...data,
+          sender: {
+            user_id: isUser.user_id,
+            full_name: isUser.full_name,
+            profile_pic: isUser.profile_pic,
+            level: isUser.getDataValue('level'),
+            frame: isUser.getDataValue('frame')
+          },
+          reciever: {
+            user_id: isReciever.user_id,
+            full_name: isReciever.full_name,
+            profile_pic: isReciever.profile_pic,
+            level: isReciever.getDataValue('level'),
+            frame: isReciever.getDataValue('frame')
+          },
+          gift,
+          sendersData
+        },
+        messsage: `Sended by ${isUser.full_name}`
+      })
+    } else if (pk_battle.host2_user_id === data.receiver_id) {
+      emitToRoom(pk_battle.host2_socket_room_id, "pk_gift_sending_to_host", {
+        data: {
+          ...data,
+          sender: {
+            user_id: isUser.user_id,
+            full_name: isUser.full_name,
+            profile_pic: isUser.profile_pic,
+            level: isUser.getDataValue('level'),
+            frame: isUser.getDataValue('frame')
+          },
+          reciever: {
+            user_id: isReciever.user_id,
+            full_name: isReciever.full_name,
+            profile_pic: isReciever.profile_pic,
+            level: isReciever.getDataValue('level'),
+            frame: isReciever.getDataValue('frame')
+          },
+          gift,
+          sendersData
+        },
+        messsage: `Sended by ${isUser.full_name}`
+      })
+    }
+
+    //Top seender in host 1 and host 2
+    await top_ranking_pk_sender(socket, data, emitEvent, emitToRoom)
+    return
+
+  } catch (error) {
+    console.log('Emit to pk_gift_sending_to_host Error: ', error)
+    emitEvent(socket.id, "pk_gift_sending_to_host", { data: null, message: String(error) })
+  }
+
+
+}
 
 async function cohost_request(socket, data, emitEvent) {
   try {
@@ -591,5 +752,6 @@ module.exports = {
   cohost_leave,
   remove_cohost,
   end_pk,
-  update_pk_score
+  update_pk_score,
+  pk_gift_sending_to_host
 };

@@ -34,7 +34,7 @@ const getDateFilter = (filter) => {
 
 
 
-async function topReceiversList(filter, loginUserId) {
+async function topReceiversList(filter, loginUserId, limit=0) {
     try {
         const dateFilter = getDateFilter(filter);
 
@@ -58,7 +58,8 @@ async function topReceiversList(filter, loginUserId) {
                 // [col("reciever.profile_pic"), "imageUrl"]
             ],
             group: ["reciever_id", "reciever.user_id"],
-            order: [[literal("score"), "DESC"]]
+            order: [[literal("score"), "DESC"]],
+             ...(limit ? { limit: Number(limit) } : {}), // 👈 magic line
         });
 
         result = result.map(r => r.get({ plain: true }));
@@ -94,7 +95,7 @@ async function topReceiversList(filter, loginUserId) {
 
 
 
-async function topSendersList(filter, loginUserId) {
+async function topSendersList(filter, loginUserId, limit=0) {
     try {
         const dateFilter = getDateFilter(filter);
         console.log(dateFilter, 'dateFilter------');
@@ -117,7 +118,8 @@ async function topSendersList(filter, loginUserId) {
                 // [col("sender.profile_pic"), "imageUrl"]
             ],
             group: ["sender_id", "sender.user_id"],
-            order: [[literal("score"), "DESC"]]
+            order: [[literal("score"), "DESC"]],
+             ...(limit ? { limit: Number(limit) } : {}), // 👈 magic line
         });
 
          result = result.map(r => r.get({ plain: true }));
@@ -184,6 +186,8 @@ async function topSenderReceiverList(req, res) {
 
 module.exports = {
     topSenderReceiverList,
+    topSendersList,
+    topReceiversList
 };
 
 
