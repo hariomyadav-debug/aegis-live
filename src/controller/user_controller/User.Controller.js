@@ -610,7 +610,8 @@ async function getUserByAuth(req, res) {
         data.user = {
             name: user.full_name,
             profile_pic: user.profile_pic,
-            consumption: user.consumption
+            consumption: user.consumption,
+            user_id: user.user_id
         }
         if(user.level){
             data.current_level = user.lavel;

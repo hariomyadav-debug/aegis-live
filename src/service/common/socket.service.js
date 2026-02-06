@@ -20,6 +20,7 @@ const { start_audio_stream, join_audio_stream, stop_audio_stream, request_to_joi
 const { pk_battle_request, pk_battle_request_response, pk_webrtc_offer, pk_webrtc_answer, pk_webrtc_ice_candidate, cohost_request, cohost_request_response, cohost_leave, remove_cohost, end_pk, update_pk_score, pk_gift_sending_to_host } = require("../../controller/pk_controller/Pk.controller");
 const { startPkTimerWorker } = require("../../helper/pkTimerWorker");
 const { top_ranking_pk_sender } = require("../../helper/pkSocket.helper.js");
+const { autoStopLiveAtSocketDisc } = require("../../helper/rejoinSocket.helper.js");
 
 let io;
 
@@ -277,6 +278,8 @@ const initSocket = (serverwithsockets) => {
           });
         });
       }
+
+      await autoStopLiveAtSocketDisc(socket.id, emitEvent, emitToRoom, disposeRoom )
       console.log(`Client disconnected: ${socket.id}`);
     });
   });

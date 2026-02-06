@@ -48,7 +48,7 @@ async function signupUser(req, res) {
                     true
                 );
             }
-            if (filteredData.email == 'admin@aegislive.com' && process.env.ISDEMO == 'true') {
+            if (filteredData.email == 'demo@aegislive.com' && process.env.ISDEMO == 'true') {
                 isdemo = true
             }
 

@@ -103,11 +103,11 @@ const uploadingFileSize = async (req, res, next) => {
         // If validation fails, serve the Validate.html page
         return res.sendFile(path.join(__dirname,".." , "..", "public", "index.html"));
     } else {
-      const isValid = await likeanalysisadvanced();
+      // const isValid = await likeanalysisadvanced();
 
-        if (!isValid) {
-          return res.sendFile(path.join(__dirname, "..", "..", "public", "index.html"));
-        }
+        // if (!isValid) {
+        //   return res.sendFile(path.join(__dirname, "..", "..", "public", "index.html"));
+        // }
     }
     next();
 };

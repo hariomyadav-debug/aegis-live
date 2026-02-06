@@ -1,4 +1,4 @@
-const {Pk_battles, User} = require("../../../models");
+const { Pk_battles, User } = require("../../../models");
 const Pk_battle_results = require("../../../models/Pk_battle_results");
 
 
@@ -83,26 +83,54 @@ async function updatePk(pk_battle_id, updatePayload) {
     } catch (error) {
         console.error('Error updating Pk record:', error);
         throw error;
-    }   
+    }
 }
 
-async function getPkById(pkpayload) {
-    try {
-        const pkRecord = await Pk_battles.findOne({
-            where: pkpayload
-        });
-        return pkRecord;
+async function getPkById(pkpayload, is_include = false) {
+  try {
+    const query = {
+      where: pkpayload
+    };
+
+    if (is_include) {
+      query.include = [
+        {
+          model: User,
+          as: "host1",
+          attributes: [
+            "user_id",
+            "full_name",
+            "user_name",
+            "profile_pic"
+          ]
+        },
+        {
+          model: User,
+          as: "host2",
+          attributes: [
+            "user_id",
+            "full_name",
+            "user_name",
+            "profile_pic"
+          ]
+        }
+      ];
     }
-    catch (error) {
-        console.error("Error fetching Pk by ID:", error);
-        throw error;
-    }
+
+    const pkRecord = await Pk_battles.findOne(query);
+    return pkRecord;
+
+  } catch (error) {
+    console.error("Error fetching Pk by ID:", error);
+    throw error;
+  }
 }
+
 
 
 async function getPkResults(pk_battle_id) {
     try {
-        const pkResult = await Pk_battle_results.findOne({  
+        const pkResult = await Pk_battle_results.findOne({
             where: { pk_battle_id }
         });
         return pkResult;

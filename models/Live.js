@@ -36,17 +36,34 @@ module.exports = (sequelize, DataTypes) => {
             allowNull: false,
             defaultValue: "",
         },
-        live_status:{
+        thumb: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            defaultValue: "",
+            get() {
+                const raw_urls = this.getDataValue("thumb");
+                // If the URL is already an S3 URL, return as-is
+                if (raw_urls?.includes(".amazonaws.com/") || raw_urls?.includes(".cloudfront.net/")) {
+                    return raw_urls;
+                }
+                const imageUrls = `${process.env.baseUrl}/${raw_urls}`;
+                return imageUrls != `${process.env.baseUrl}/`
+                    ? imageUrls
+                    : `${process.env.baseUrl}/uploads/not-found-images/profile-image.png`;
+            },
+            comment: "Thumbnail image",
+        },
+        live_status: {
             type: DataTypes.STRING,
             allowNull: false,
             defaultValue: "live",
         },
-        is_demo:{
+        is_demo: {
             type: DataTypes.BOOLEAN,
             allowNull: false,
             defaultValue: false,
         }
-       
+
     });
     Live.associate = function (models) {
         // Live.belongsTo(models.User, {

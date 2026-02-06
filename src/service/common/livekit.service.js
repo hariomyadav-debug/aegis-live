@@ -29,13 +29,21 @@ const createLivekitRoom = async (roomName) => {
     }
 }
 
+const roomList = async () => {
+    if (roomService) {
+        const rooms = await roomService.listRooms();
+        return rooms;
+    }
+    return null;
+}
+
 const generateLivekitToken = async (roomName, identity, role) => {
     try {
 
         let grants = {
             roomJoin: true,
-            room: "room_name",
-            // room: `${roomName}`,
+            // room: "room_name",
+            room: `${roomName}`,
         };
 
 
@@ -51,7 +59,8 @@ const generateLivekitToken = async (roomName, identity, role) => {
             grants = {
                 ...grants,
                 canSubscribe: true,
-                canPublish: false,
+                canPublish: true,
+                // canPublish: false,     // TODO: for now commited
             };
         } else {
             // participant
@@ -69,10 +78,7 @@ const generateLivekitToken = async (roomName, identity, role) => {
         token.addGrant(grants);
         const jwt = await token.toJwt();
 
-        console.log({
-            token: jwt,
-            url: LIVEKIT_HOST,
-        }, 'ffff----------', API_KEY, API_SECRET, roomName, identity, role, grants);
+        console.log(await roomList(), 'lisst-----------------');
 
         return {
             token: jwt,
@@ -85,13 +91,7 @@ const generateLivekitToken = async (roomName, identity, role) => {
     }
 }
 
-const roomList = async () => {
-    if (roomService) {
-        const rooms = await roomService.listRooms();
-        return rooms;
-    }
-    return null;
-}
+
 
 const listParticipants = async (roomName) => {
     if (roomService) {

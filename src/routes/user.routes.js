@@ -22,7 +22,7 @@ router.post('/update-notification-list', update_notificationList);
 
 // TODO: correct route name,  User details for manu 
 router.get('/get-user', getUserByAuth);
-router.post('/get-user-details', getUserDetails);
+router.post('/get-user-details', getUserDetails);     
 router.get('/get-user-emoji', geteUserEmoji);
 
 

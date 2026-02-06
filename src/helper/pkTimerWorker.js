@@ -41,9 +41,10 @@ export function startPkTimerWorker({ emitToRoom, emitEvent, getRoomMembers }) {
         if (remaining <= 1) {
           await redis.del(key);
 
+          console.log("pk end by timer ===========> ", { pk_battle_id, remaining })
           await end_pk(
             null,
-            { pk_battle_id },
+            { pk_battle_id, remaining },
             emitEvent,
             emitToRoom,
             getRoomMembers

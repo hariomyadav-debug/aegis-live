@@ -38,13 +38,13 @@ export async function top_ranking_pk_sender(socket, data, emitEvent, emitToRoom)
 
     const topSenderOne = await getGiftSentGroupedByUser({
       transaction_ref: "pk",
-      transaction_ref_id: data.pk_battle_id,
+      transaction_ref_id: pk_battle.pk_battle_id,
       reciever_id: pk_battle.host1_user_id
     }, 3);
 
     const topSenderTwo = await getGiftSentGroupedByUser({
       transaction_ref: "pk",
-      transaction_ref_id: data.pk_battle_id,
+      transaction_ref_id: pk_battle.pk_battle_id,
       reciever_id: pk_battle.host2_user_id
     }, 3)
 

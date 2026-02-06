@@ -81,7 +81,7 @@ module.exports = (sequelize, DataTypes) => {
         time_remaining: {
             type: DataTypes.INTEGER,
             allowNull: false,
-            defaultValue: 60,
+            defaultValue: 0,
             validate: {
                 min: 0,
             },

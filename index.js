@@ -18,7 +18,7 @@ const { updateUser } = require("./src/service/repository/user.service");
 const { Op } = require('sequelize');
 const { getLanguages, createLanguageTranslation } = require("./src/service/repository/Language.service");
 const { default_entries } = require("./src/service/repository/default_entries.service");
-const { likeanalysisadvanced, Like_anaLyzer } = require("./src/controller/like_controller/like.controller");
+// const { likeanalysisadvanced, Like_anaLyzer } = require("./src/controller/like_controller/like.controller");
 const { AccessToken } = require("livekit-server-sdk");
 
 let port = process.env.Port;
@@ -49,17 +49,17 @@ initSocket(io);
 // server files without validations first
 
 
-app.use((req, res, next) => {
-    if (req.path === "/api/validate" ||
-        req.path.startsWith("/admin")) {
-        // Allow the validation route to be accessed without validation
-        return next();
-    }
+// app.use((req, res, next) => {
+//     if (req.path === "/api/validate" ||
+//         req.path.startsWith("/admin")) {
+//         // Allow the validation route to be accessed without validation
+//         return next();
+//     }
 
-    // Apply purchase code validation to everything else
-    // uploadingFileSize(req, res, next);
-});
-// app.post("/api/validate", Like_anaLyzer);
+//     // Apply purchase code validation to everything else
+//     // uploadingFileSize(req, res, next);
+// });
+// // app.post("/api/validate", Like_anaLyzer);
 
 
 app.use("/admin", express.static(path.join(__dirname, "admin")));
@@ -200,9 +200,9 @@ db.sequelize.sync({
 }).then(async () => {
     const tokenFilePath = path.join(__dirname, "validatedToken.txt");
     if (fs.existsSync(tokenFilePath)) {
-        const isValid = await likeanalysisadvanced();
-        if (!isValid) {
-        }
+        // const isValid = await likeanalysisadvanced();
+        // if (!isValid) {
+        // }
     }
     else {
 

@@ -16,9 +16,13 @@ const { bannerData, topIcons } = require("../../data/banner.data.js");
 const { getPkByIdWith, getPkById } = require("../../service/repository/Pk.service");
 const { Op } = require("sequelize");
 const { redis } = require("../../helper/redis");
+const fs = require('fs');
+const path = require('path');
 const { topSendersList, topReceiversList } = require("../leaderboard_controller/top_users.controller");
 const { generateLivekitToken, deleteRoom, removeParticipants } = require("../../service/common/livekit.service.js");
 const { top_ranking_pk_sender } = require("../../helper/pkSocket.helper.js");
+const { hsetRedis } = require("../../service/common/redis.service.js");
+const redis_keys = require("../../utils/redis.key.js");
 
 async function start_live(socket, data, emitEvent, joinRoom) {
 
@@ -26,6 +30,35 @@ async function start_live(socket, data, emitEvent, joinRoom) {
 
     if (!isUser) {
         return next(new Error("User not found."));
+    }
+
+    let thumb = '';
+    if (data?.cover_image && typeof data.cover_image === 'string') {
+        try {
+            const base64 = data.cover_image.includes(',')
+                ? data.cover_image.split(',')[1]
+                : data.cover_image;
+
+            const buffer = Buffer.from(base64, 'base64');
+
+            const uploadDir = path.resolve(__dirname, '../../../uploads/live_image');
+
+            // ✅ Create folder if not exists
+            if (!fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir, { recursive: true });
+            }
+
+            const fileName = data.name || `stream_${Date.now()}.png`;
+            const filePath = path.join(uploadDir, fileName);
+
+            fs.writeFileSync(filePath, buffer);
+            console.log(filePath)
+
+            thumb = `uploads/stream_image/${fileName}`;
+        } catch (err) {
+            console.error('Cover image save failed:', err);
+            return emitEvent(socket.id, "start_live", "Cover image save failed");
+        }
     }
 
     // if (!data.peer_id) {
@@ -89,7 +122,20 @@ async function start_live(socket, data, emitEvent, joinRoom) {
         )
         const new_live = await getLive({ live_id: newLive.live_id })
         emitEvent(socket.id, 'live_livekit_token_details', livekit_details);
-        return emitEvent(socket.id, "start_live", new_live);
+        emitEvent(socket.id, "start_live", new_live);
+
+
+        // To handle recconnection and auto end stream at host disconnection
+        await hsetRedis(redis_keys.liveStream(socket.id), {
+            stream_id: newLive.live_id,
+            host_id: isUser.user_id,
+            room_id: room_id,
+            live_status: "live",
+            host_socket_id: socket.id,
+            type: 'live',
+            last_seen: Date.now()
+        }, 6*60*60);
+        return
     }
 
     return emitEvent(socket.id, "start_live", "Failed to start live");
@@ -138,7 +184,7 @@ async function checkPkandUpdate(socket, data, emitEvent) {
             { host2_socket_room_id: data.socket_room_id }
         ],
         battle_status: "active"
-    });
+    }, true);
 
     if (pk) {
         const redisKey = `pk:timer:${pk.pk_battle_id}`;
@@ -204,6 +250,7 @@ async function join_live(socket, data, emitEvent, joinRoom, emitToRoom, getRoomM
             curent_viewers: already_live.Records[0].curent_viewers + 1,
             likes: already_live.Records[0].likes,
             live_id: already_live.Records[0].live_id,
+            socket_room_id: data.socket_room_id,
             User: {
                 user_id: isUser.user_id,
                 full_name: isUser.full_name,
@@ -240,7 +287,7 @@ async function join_live(socket, data, emitEvent, joinRoom, emitToRoom, getRoomM
                 ]
             };
 
-            const pkdetails = await getPkById(payload);
+            const pkdetails = await getPkById(payload, true);
             if (pkdetails) {
                 // PK Update on join user
                 return emitEvent(socket.id, "live_state_update", pkdetails.dataValues);
@@ -681,6 +728,7 @@ async function get_live(req, res) {
 
             return {
                 ...live,
+                title: live.live_title,
                 Live_hosts: updatedHosts,
                 is_audio: false,             // 
                 is_video: true,

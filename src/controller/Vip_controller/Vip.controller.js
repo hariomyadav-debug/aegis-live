@@ -128,10 +128,10 @@ async function getVip_level_WP(req, res) {
         //  Get vip record
          const record_payload = { user_id: req.authData.user_id };
         let vipRecord = await getVip_record(record_payload);
-        if (vipRecord && vipRecord.length < 1) {
-            vipRecord = null;
-        }else{
+        if (vipRecord && vipRecord.length > 0) {
             vipRecord = vipRecord[0];
+        }else{
+            vipRecord = null;
         }
         let recordStatus = 0;
         if (vipRecord) {
@@ -147,7 +147,7 @@ async function getVip_level_WP(req, res) {
         list = list.Records.map(data => ({
             ...updateFieldsFilter(data, allowedFields),
             is_locked: (parseInt(userData.available_coins) < parseInt(data.price_30_days) ? true: false),
-            is_bought: ((vipRecord.vip_id === data.id && recordStatus === 1) ? true: false),
+            is_bought: (((vipRecord && vipRecord?.vip_id) === data.id && recordStatus === 1) ? true: false),
             props: [data?.avatarIcon && data?.avatarIcon,
             data?.cardIcon && data?.cardIcon,
             data?.entryIcon && data?.entryIcon,
@@ -271,8 +271,7 @@ async function deductUserCoins(userCoin, vip_id, days, price, user_id, transacti
     }
 
     const result = await User.update(
-        { available_coins: sequelize.literal(`coin - ${price}`) },
-        { consumption: sequelize.literal(`consumption + ${price}`) },
+        { coin: sequelize.literal(`coin - ${price}`) },
         { where: { id: user_id }, transaction }
     );
 

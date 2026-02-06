@@ -13,6 +13,8 @@ const fs = require('fs');
 const path = require('path');
 const { getGift, getOneGift } = require("../../service/repository/Gift.service");
 const { generateLivekitToken, deleteRoom, removeParticipants } = require("../../service/common/livekit.service");
+const { hsetRedis } = require("../../service/common/redis.service.js");
+const redis_keys = require("../../utils/redis.key.js");
 
 async function start_audio_stream(socket, data, emitEvent, joinRoom) {
     const isUser = await getUser({ user_id: socket.authData.user_id });
@@ -113,7 +115,19 @@ async function start_audio_stream(socket, data, emitEvent, joinRoom) {
         const new_stream = await getAudioStream({ stream_id: newStream.stream_id })
 
         emitEvent(socket.id, 'stream_livekit_token_details', livekit_details);
-        return emitEvent(socket.id, "start_audio_stream", new_stream, data?.emit_type);
+         emitEvent(socket.id, "start_audio_stream", new_stream, data?.emit_type);
+
+         // To handle recconnection and auto end stream at host disconnection
+        await hsetRedis(redis_keys.liveStream(socket.id), {
+            stream_id: newStream.stream_id,
+            host_id: isUser.user_id,
+            room_id: stream_room_id,
+            live_status: "live",
+            host_socket_id: socket.id,
+            type: 'audio',
+            last_seen: Date.now()
+        }, 6*60*60);
+        return
 
     }
 
@@ -459,7 +473,7 @@ async function accept_request_to_join_audio_stream(socket, data, emitEvent, join
         })
 
         const main_streamer = await getUser({ user_id: new_host.user_id })
-        emitEvent(main_streamer.socket_id, 'stream_livekit_token_details', livekit_details);
+        // emitEvent(main_streamer.socket_id, 'stream_livekit_token_details', livekit_details);
         emitEvent(main_streamer.socket_id, "activity_on_audio_stream", {
             message: "New User Joined",
             User: {
