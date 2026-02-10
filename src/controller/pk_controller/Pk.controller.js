@@ -606,7 +606,9 @@ async function pk_gift_sending_to_host(socket, data, emitEvent, emitToRoom, getR
 
     let updatePayload = {
       host1_score_coins: pk_battle.host1_score_coins,
-      host1_total_points: pk_battle.host1_score_coins
+      host1_total_points: pk_battle.host1_score_coins,
+      host2_score_coins: pk_battle.host2_score_coins,
+      host2_total_points: pk_battle.host2_score_coins
     }
 
 

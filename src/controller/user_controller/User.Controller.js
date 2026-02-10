@@ -610,8 +610,7 @@ async function getUserByAuth(req, res) {
         data.user = {
             name: user.full_name,
             profile_pic: user.profile_pic,
-            consumption: user.consumption,
-            user_id: user.user_id
+            consumption: user.consumption
         }
         if(user.level){
             data.current_level = user.lavel;
@@ -647,6 +646,87 @@ async function getUserByAuth(req, res) {
     }
 }
 
+async function searchUserList(req, res) {
+    try {
+        const { search = '', page = 1, pageSize = 10 } = req.body;
+
+        // Validate search input
+        if (!search || search.trim() === '') {
+            return generalResponse(
+                res,
+                { Records: [], Pagination: {} },
+                "Please provide a search term",
+                false,
+                true
+            );
+        }
+
+        // Define attributes to return
+        const attributes = [
+            'user_id',
+            'full_name',
+            'first_name',
+            'last_name',
+            'user_name',
+            'email',
+            'mobile_num',
+            'profile_pic',
+            'country',
+            'gender',
+            'bio',
+            'profile_verification_status',
+            'login_verification_status',
+            'available_coins',
+            'diamond',
+            'blocked_by_admin',
+            'createdAt'
+        ];
+
+        // Create search payload to pass to service
+        const searchPayload = {
+            search: search.trim(),
+            isNumeric: !isNaN(search.trim())
+        };
+
+        // Get users based on search criteria across multiple fields
+        const searchResults = await getUsers(searchPayload, { page, pageSize }, attributes, [], [['updatedAt', 'DESC']]);
+
+        if (searchResults?.Records?.length <= 0) {
+            return generalResponse(
+                res,
+                {
+                    Records: [],
+                    Pagination: searchResults.Pagination
+                },
+                "No users found matching your search",
+                true,
+                true
+            );
+        }
+
+        return generalResponse(
+            res,
+            {
+                Records: searchResults.Records,
+                Pagination: searchResults.Pagination
+            },
+            "Users found successfully",
+            true,
+            false
+        );
+
+    } catch (error) {
+        console.error("Error in searching users", error);
+        return generalResponse(
+            res,
+            {},
+            "Something went wrong while searching for users!",
+            false,
+            true
+        );
+    }
+}
+
 
 module.exports = {
     findUser,
@@ -657,5 +737,6 @@ module.exports = {
     findUser_not_following,
     getUserDetails,
     geteUserEmoji,
-    getUserByAuth
+    getUserByAuth,
+    searchUserList
 };  

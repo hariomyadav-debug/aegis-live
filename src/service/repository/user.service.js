@@ -31,16 +31,45 @@ const getUsers = async (
             });
         }
 
+        // Handle unified search across multiple fields
+        if (filterPayload.search) {
+            const searchTerm = filterPayload.search;
+            const orConditions = [
+                { user_name: { [Op.like]: `%${searchTerm}%` } },
+                { full_name: { [Op.like]: `%${searchTerm}%` } },
+                { first_name: { [Op.like]: `%${searchTerm}%` } },
+                { last_name: { [Op.like]: `%${searchTerm}%` } },
+                { email: { [Op.like]: `%${searchTerm}%` } },
+                { mobile_num: { [Op.like]: `%${searchTerm}%` } },
+                { bio: { [Op.like]: `%${searchTerm}%` } }
+            ];
+
+            // If the search term is numeric, also search by user_id
+            if (filterPayload.isNumeric) {
+                orConditions.push({ user_id: parseInt(searchTerm) });
+            }
+
+            whereCondition[Op.or] = orConditions;
+        }
         if (filterPayload.user_name) {
             whereCondition.user_name = filterPayload.user_check
-                ? filterPayload.user_name
-                : { [Op.like]: `${filterPayload.user_name}%` };
+            ? filterPayload.user_name
+            : { [Op.like]: `${filterPayload.user_name}%` };
+        }
+        if (filterPayload.full_name) {
+            whereCondition.full_name = { [Op.like]: `%${filterPayload.full_name}%` };
+        }
+        if (filterPayload.first_name) {
+            whereCondition.first_name = { [Op.like]: `${filterPayload.first_name}%` };
+        }
+        if (filterPayload.last_name) {
+            whereCondition.last_name = { [Op.like]: `${filterPayload.last_name}%` };
         }
         if (filterPayload.email) whereCondition.email = filterPayload.email;
         if (filterPayload.mobile_num) whereCondition.mobile_num = filterPayload.mobile_num;
         if (filterPayload.user_id) whereCondition.user_id = filterPayload.user_id;
 
-        if (!filterPayload.user_id && excludedUserIds?.length > 0) {
+        if (!filterPayload.user_id && !filterPayload.search && excludedUserIds?.length > 0) {
             whereCondition.user_id = { [Sequelize.Op.notIn]: excludedUserIds };
         }
 
@@ -49,6 +78,7 @@ const getUsers = async (
         }
 
 
+        console.log('Where Condition:', whereCondition);
 
         const { rows, count } = await User.findAndCountAll({
             where: whereCondition,

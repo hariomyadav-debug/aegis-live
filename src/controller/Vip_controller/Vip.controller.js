@@ -1,10 +1,11 @@
-const { Vip_avatar_icon, Vip_card_icon, Vip_chat_bubble, Vip_entry_vehicle, Vip_mic_wave, Vip_noble_icon, Vip_poster, sequelize } = require("../../../models");
+const { Vip_avatar_icon, Vip_card_icon, Vip_chat_bubble, Vip_entry_vehicle, Vip_mic_wave, Vip_noble_icon, Vip_poster, sequelize, User } = require("../../../models");
 const { generalResponse } = require("../../helper/response.helper");
 const updateFieldsFilter = require("../../helper/updateField.helper");
 const { getFrameBy, getFrame_User, updateFrame_User, insertFrame_user } = require("../../service/repository/Store/Frame.service");
 const { getMountBy, getMount_User, updateMount_User, insertMount_user } = require("../../service/repository/Store/Mount.service");
 const { getUser } = require("../../service/repository/user.service");
 const { createVip_level, getVip_levelWithPagination, getPrivilagesByVipIds, getVip_record, updateVip_record, createVip_Record, createVip_history } = require("../../service/repository/Vip.service");
+const { Vip_record } = require("../../../models");
 
 async function createVip_levelList(req, res) {
     const admin_id = req.authData.user_id
@@ -66,37 +67,37 @@ async function createVip_levelList(req, res) {
 async function getVip_level_WP(req, res) {
     try {
 
-        const userData = await getUser({user_id: req.authData.user_id});
+        const userData = await getUser({ user_id: req.authData.user_id });
 
         let includeData = [
             {
                 model: Vip_avatar_icon,
                 as: 'avatarIcon'
             },
-            {
-                model: Vip_card_icon,
-                as: 'cardIcon'
-            },
-            {
-                model: Vip_chat_bubble,
-                as: 'bubbleIcon'
-            },
+            // {
+            //     model: Vip_card_icon,
+            //     as: 'cardIcon'
+            // },
+            // {
+            //     model: Vip_chat_bubble,
+            //     as: 'bubbleIcon'
+            // },
             {
                 model: Vip_entry_vehicle,
                 as: 'entryIcon'
             },
-            {
-                model: Vip_mic_wave,
-                as: 'micIcon'
-            },
+            // {
+            //     model: Vip_mic_wave,
+            //     as: 'micIcon'
+            // },
             {
                 model: Vip_noble_icon,
                 as: 'nobleIcon'
             },
-            {
-                model: Vip_poster,
-                as: 'posterIcon'
-            }
+            // {
+            //     model: Vip_poster,
+            //     as: 'posterIcon'
+            // }
         ];
         let attributes = ['id', 'name', 'icon', 'info_bg', 'bg_image', 'category', 'price_30_days']
         let list = await getVip_levelWithPagination({}, includeData, attributes);
@@ -120,17 +121,17 @@ async function getVip_level_WP(req, res) {
             );
 
         }
-        
+
         let vip_ids = list.Records.map(data => data.id);
         const privileges = await getPrivilagesByVipIds(vip_ids);
 
 
         //  Get vip record
-         const record_payload = { user_id: req.authData.user_id };
+        const record_payload = { user_id: req.authData.user_id };
         let vipRecord = await getVip_record(record_payload);
         if (vipRecord && vipRecord.length > 0) {
             vipRecord = vipRecord[0];
-        }else{
+        } else {
             vipRecord = null;
         }
         let recordStatus = 0;
@@ -146,8 +147,8 @@ async function getVip_level_WP(req, res) {
         let allowedFields = ['id', 'name', 'icon', 'info_bg', 'bg_image', 'category', 'price_30_days']
         list = list.Records.map(data => ({
             ...updateFieldsFilter(data, allowedFields),
-            is_locked: (parseInt(userData.available_coins) < parseInt(data.price_30_days) ? true: false),
-            is_bought: (((vipRecord && vipRecord?.vip_id) === data.id && recordStatus === 1) ? true: false),
+            is_locked: (parseInt(userData.available_coins) < parseInt(data.price_30_days) ? true : false),
+            is_bought: (((vipRecord && vipRecord?.vip_id) === data.id && recordStatus === 1) ? true : false),
             props: [data?.avatarIcon && data?.avatarIcon,
             data?.cardIcon && data?.cardIcon,
             data?.entryIcon && data?.entryIcon,
@@ -182,21 +183,59 @@ async function getVip_level_WP(req, res) {
 
 }
 
+async function deductUserCoins(userCoin, vip_id, days, price, user_id, transaction) {
+    if ((userCoin - price) < 0) {
+        return { success: false, message: 'User insufficient balance' };
+    }
 
-async function applyVips(timestamp, noOfDays, vip_id, user_id, uid, vip_cost) {
-    const startTime = new Date(timestamp).getTime() / 1000;
-    const addTime = Math.floor(Date.now() / 1000);
+    const result = await User.update(
+        {
+            available_coin: sequelize.literal(`available_coin - ${price}`),
+            consumption: sequelize.literal(`consumption + ${price}`)
+        },
+        {
+            where: { user_id: user_id },
+            transaction
+        }
+    );
+
+    console.log("Deduct user coins result:====>", result);
+
+    if (result[0] > 0) {
+        // await UserCoinRecord.create(
+        //     {
+        //         type: 0,
+        //         action: 18,
+        //         uid: user_id,
+        //         touid: user_id,
+        //         giftid: vip_id,
+        //         giftcount: days,
+        //         totalcoin: price,
+        //         addtime: Math.floor(Date.now()),
+        //     },
+        //     { transaction }
+        // );
+
+        return { success: true, message: 'Updated user balance' };
+    }
+
+    return { success: false, message: 'Failed to update user balance' };
+}
+
+async function applyVips(timestamp, noOfDays, vip_id, user_id, uid, vip_cost, userCoin) {
+    const startTime = new Date(timestamp).getTime();
+    const addTime = Math.floor(Date.now());
     let endTime = startTime + 86400 * noOfDays;
-
+    user_id = Number(user_id);
     let frameId = 0;
     let carId = 0;
 
     const vipMap = {
-        2: { frameId: 122 },
-        3: { frameId: 123, carId: 53 },
-        4: { frameId: 124, carId: 54 },
-        5: { frameId: 125, carId: 55 },
-        6: { frameId: 126, carId: 56 },
+        2: { frameId: 112 },
+        3: { frameId: 113, carId: 53 },
+        4: { frameId: 114, carId: 54 },
+        5: { frameId: 115, carId: 55 },
+        6: { frameId: 116, carId: 56 },
     };
 
     if (vipMap[vip_id]) {
@@ -204,13 +243,12 @@ async function applyVips(timestamp, noOfDays, vip_id, user_id, uid, vip_cost) {
         carId = vipMap[vip_id].carId || 0;
     }
 
+    await deductUserCoins(userCoin, vip_id, noOfDays, vip_cost, user_id);
     /* FRAME */
     if (frameId) {
         const frame = await getFrameBy({ frame_id: frameId });
         if (frame) {
-            const userFrame = await getFrame_User({
-                where: { user_id: user_id, frame_id: frameId },
-            });
+            const userFrame = await getFrame_User({ user_id: Number(user_id), frame_id: frameId });
 
             if (userFrame) {
                 if (userFrame.endtime > addTime) {
@@ -258,42 +296,10 @@ async function applyVips(timestamp, noOfDays, vip_id, user_id, uid, vip_cost) {
     await createVip_history({
         user_id: uid,
         coin: vip_cost,
-        vip_id: vip_id,
+        vipid: vip_id,
         add_time: addTime.toString(),
         end_time: endTime.toString(),
     });
-}
-
-
-async function deductUserCoins(userCoin, vip_id, days, price, user_id, transaction) {
-    if (userCoin - price < 0) {
-        return { success: false, message: 'User insufficient balance' };
-    }
-
-    const result = await User.update(
-        { coin: sequelize.literal(`coin - ${price}`) },
-        { where: { id: user_id }, transaction }
-    );
-
-    if (result[0] > 0) {
-        await UserCoinRecord.create(
-            {
-                type: 0,
-                action: 18,
-                uid: user_id,
-                touid: user_id,
-                giftid: vip_id,
-                giftcount: days,
-                totalcoin: price,
-                addtime: Math.floor(Date.now() / 1000),
-            },
-            { transaction }
-        );
-
-        return { success: true, message: 'Updated user balance' };
-    }
-
-    return { success: false, message: 'Failed to update user balance' };
 }
 
 
@@ -304,7 +310,9 @@ async function updateVip(
     noOfDays,
     vip_id,
     user_id,
-    recordVipId
+    recordVipId,
+    vip_cost,
+    userCoin
 ) {
 
     const affected = await updateVip_record(
@@ -315,7 +323,7 @@ async function updateVip(
             no_of_days: noOfDays,
             vip_id: vip_id,
         },
-        { id: recordVipId, user_id:user_id  }
+        { id: recordVipId, user_id: user_id }
     );
 
 
@@ -323,7 +331,7 @@ async function updateVip(
         return { success: false, message: 'Failed to update SVIP record.' };
     }
 
-    //   await applyVips(timestamp, noOfDays, vip_id, user_id, user_id, vip_cost);
+      await applyVips(timestamp, noOfDays, vip_id, user_id, user_id, vip_cost, userCoin);
     return {
         success: true,
         message: `SVIP ${vip_id} for ${noOfDays} days acquired successfully.`,
@@ -337,14 +345,15 @@ async function upgradeAndInsertVIPFunc(
     recordStatus,
     timestamp,
     user_id,
-    note
+    note,
+    userCoin
 ) {
     if (vipRecord) {
-        
+
         if (vipRecord.vip_id === vipData.id) {
-           
+
             if (vipRecord.no_of_days === vipData.no_of_days) {
-                
+
                 return { success: false, message: 'You already acquired this VIP' };
             }
 
@@ -363,7 +372,8 @@ async function upgradeAndInsertVIPFunc(
                     vipData.id,
                     user_id,
                     user_id,
-                    vipData.target
+                    vipData.target,
+                    userCoin
                 );
 
                 return {
@@ -390,7 +400,8 @@ async function upgradeAndInsertVIPFunc(
                 vipData.id,
                 user_id,
                 vipRecord.id,
-                vipData.target
+                vipData.target,
+                userCoin
             );
         }
 
@@ -413,7 +424,8 @@ async function upgradeAndInsertVIPFunc(
         vipData.id,
         user_id,
         user_id,
-        vipData.target
+        vipData.target,
+        userCoin
     );
 
 
@@ -487,7 +499,7 @@ async function acquire_vip(req, res) {
             );
         }
 
-        if (!vipData?.target && (vipData.target > isUser.available_coins)) {
+        if (!vipData?.target || (vipData.target > isUser.available_coins)) {
             return generalResponse(
                 res,
                 { success: false },
@@ -501,7 +513,7 @@ async function acquire_vip(req, res) {
         let vipRecord = await getVip_record(record_payload);
         if (vipRecord && vipRecord.length < 1) {
             vipRecord = null;
-        }else{
+        } else {
             vipRecord = vipRecord[0];
         }
         let recordStatus = 0;
@@ -512,13 +524,15 @@ async function acquire_vip(req, res) {
             recordStatus = Date.now() < expire ? 1 : 2;
         }
 
+        console.log("=========>qq", vipData);
         const result = await upgradeAndInsertVIPFunc(
             vipRecord,
             vipData,
             recordStatus,
             timestamp,
             filteredData.user_id,
-            "note"
+            "note",
+            isUser.available_coins
         );
 
         if (result && result?.data?.success) {
@@ -557,11 +571,187 @@ async function acquire_vip(req, res) {
     }
 }
 
-// acquireVip({ body: { 'days': 90, 'user_id': 8, vip_id: 1, 'category': 'buy' } })
+/**
+ * Get VIP permissions for a user
+ */
+async function getPermissions(req, res) {
+  try {
+   
+    // Fetch VIP record
+    const record = await Vip_record.findOne({
+      where: { user_id: req.authData.user_id },
+      order: [['id', 'DESC']],
+      raw: true,
+    });
+
+    if (!record) {
+      return generalResponse(
+        res,
+        { data: null },
+        "Currently you don't have any SVIP!",
+        false,
+        true
+      );
+    }
+
+    // Check if VIP is expired
+    const expireAt = new Date(Number(record.timestamp)).getTime() + record.no_of_days * 24 * 60 * 60 * 1000;
+    
+    if (new Date().getTime() > expireAt) {
+      return generalResponse(
+        res,
+        { data: null },
+        "SVIP expired!",
+        false,
+        true
+      );
+    }
+
+    console.log("VIP permissions record:====>", record);
+
+    return generalResponse(
+      res,
+      { data: record },
+      "Success",
+      true,
+      true
+    );
+  } catch (error) {
+    console.error("VIP getPermissions error:", error);
+    return generalResponse(
+      res,
+      { success: false },
+      "Server error",
+      false,
+      true
+    );
+  }
+}
+
+/**
+ * Toggle VIP permissions
+ */
+async function togglePermissions(req, res) {
+  const { type } = req.body;
+  try {
+    const userId = req.authData.user_id;
+    // Fetch VIP record
+    const record = await Vip_record.findOne({
+      where: { user_id: userId },
+      order: [['id', 'DESC']],
+      raw: true,
+    });
+
+    if (!record) {
+      return generalResponse(
+        res,
+        { success: false },
+        "Currently you don't have any SVIP!",
+        false,
+        true
+      );
+    }
+
+    // Check if VIP is expired
+    const expireAt = new Date(Number(record.timestamp)).getTime() + record.no_of_days * 24 * 60 * 60 * 1000;
+    
+    if (new Date().getTime() > expireAt) {
+      return generalResponse(
+        res,
+        { success: false },
+        "SVIP expired!",
+        false,
+        true
+      );
+    }
+
+    // Validate permission level requirement
+    const minLevelRequired = {
+      'kicked_out': 2,
+      'hide_gift': 4,
+      'following_room': 5,
+    };
+
+    if (record.vip_id < (minLevelRequired[type] || 0)) {
+      return generalResponse(
+        res,
+        { success: false },
+        `To enable this permission, minimum SVIP ${minLevelRequired[type]} required.`,
+        false,
+        true
+      );
+    }
+
+    // Update permission
+    const updateData = {};
+    let permissionName = '';
+    let isOn = 'OFF';
+
+    switch (type) {
+      case 'kicked_out':
+        updateData.kicked_out = record.kicked_out === 1 ? 0 : 1;
+        isOn = record.kicked_out === 1 ? 'OFF' : 'ON';
+        permissionName = 'Avoid Being Kicked';
+        break;
+      case 'hide_gift':
+        updateData.hide_gift = record.hide_gift === 1 ? 0 : 1;
+        isOn = record.hide_gift === 1 ? 'OFF' : 'ON';
+        permissionName = 'Hide Gift Record';
+        break;
+      case 'following_room':
+        updateData.following_room = record.following_room === 1 ? 0 : 1;
+        isOn = record.following_room === 1 ? 'OFF' : 'ON';
+        permissionName = 'Avoid Following';
+        break;
+      default:
+        return generalResponse(
+          res,
+          { success: false },
+          "Invalid permission!",
+          false,
+          true
+        );
+    }
+
+    // Update in database
+    const updated = await Vip_record.update(updateData, {
+      where: { id: record.id },
+    });
+
+    if (!updated || updated[0] === 0) {
+      return generalResponse(
+        res,
+        { success: false },
+        "Failed to update permission!",
+        false,
+        true
+      );
+    }
+
+    return generalResponse(
+      res,
+      { success: true },
+      `${permissionName} ${isOn}`,
+      true,
+      true
+    );
+  } catch (error) {
+    console.error("VIP togglePermissions error:", error);
+    return generalResponse(
+      res,
+      { success: false },
+      "Server error",
+      false,
+      true
+    );
+  }
+}
 
 
 module.exports = {
     createVip_levelList,
     getVip_level_WP,
-    acquire_vip
+    acquire_vip,
+     getPermissions,
+  togglePermissions,
 }

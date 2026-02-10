@@ -1,8 +1,10 @@
 const { Op } = require('sequelize');
 const { Sequelize } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
-
+const util = require('util');
 const { Live, User, Live_host } = require("../../../models");
+const { getUserframe } = require('./Store/Frame.service');
+const { getUserLevel } = require('./Level.service');
 
 
 async function createLive(livePayload) {
@@ -17,28 +19,74 @@ async function createLive(livePayload) {
 async function getLive(livePayload, pagination = { page: 1, pageSize: 10 }, excludedUserIds = [], order = [['createdAt', 'DESC']]) {
     try {
         // Destructure and ensure proper types for pagination values
-        const { page = 1, pageSize = 10 } = pagination;
-        const offset = (Number(page) - 1) * Number(pageSize);
-        const limit = Number(pageSize);
+        const page = Number(pagination.page) || 1;
+        const pageSize = Number(pagination.pageSize) || 10;
+        const offset = (page - 1) * pageSize;
+        const limit = pageSize;
 
-        // Build the where condition
-        let wherecondition = { ...livePayload }; // Default to the provided payload
-
-        if (livePayload.live_status == "") {
-            delete wherecondition.live_status
+        // Build the where condition - create a new object to avoid side effects
+        let wherecondition = {};
+        
+        // Extract search term if provided
+        const searchTerm = livePayload?.search ? String(livePayload.search).trim() : '';
+        const isNumeric = !isNaN(searchTerm) && searchTerm !== '';
+        
+        // Handle each field from livePayload except search
+        for (const key in livePayload) {
+            if (key !== 'search') {
+                wherecondition[key] = livePayload[key];
+            }
+        }
+        
+        // Remove live_status if it's an empty string
+        if (wherecondition.live_status === "") {
+            delete wherecondition.live_status;
         }
 
-        // Add pagination options to the payload
+        // Add search filter if provided
+        if (searchTerm) {
+            const searchConditions = [
+                { live_title: { [Op.like]: `%${searchTerm}%` } },
+                { socket_room_id: { [Op.like]: `%${searchTerm}%` } },
+            ];
+            
+            if (isNumeric) {
+                searchConditions.push({ live_id: parseInt(searchTerm) });
+            }
+            
+            wherecondition[Op.or] = searchConditions;
+        }
+
+        if (searchTerm) {
+            wherecondition[Op.or] = [
+                { live_title: { [Op.iLike]: `%${searchTerm}%` } },
+                { socket_room_id: { [Op.iLike]: `%${searchTerm}%` } },
+                ...(isNumeric ? [{ live_id: Number(searchTerm) }] : []),
+
+                // 🔥 Host search
+                { '$Live_hosts.User.full_name$': { [Op.iLike]: `%${searchTerm}%` } },
+                { '$Live_hosts.User.user_name$': { [Op.iLike]: `%${searchTerm}%` } }
+            ];
+        }
+
+
+        // Build query with distinct for accurate counting
         const query = {
             where: wherecondition,
             limit,
             offset,
+            subQuery: false, // 🔥 MUST
             include: [
                 {
                     model: Live_host,
+                    as: 'Live_hosts',
+                    where: { is_live: true },
+                    required: true,
+                    where: { is_live: true },
                     include: [
                         {
                             model: User,
+                             required: !!searchTerm, // 🔥 only INNER JOIN when searching
                             attributes: {
                                 exclude: [
                                     "password",
@@ -48,9 +96,6 @@ async function getLive(livePayload, pagination = { page: 1, pageSize: 10 }, excl
                                     "selfie",
                                     "device_token",
                                     "dob",
-                                    // "country_code",
-                                    // "mobile_num",
-                                    // "login_type",
                                     "gender",
                                     "state",
                                     "city",
@@ -70,9 +115,6 @@ async function getLive(livePayload, pagination = { page: 1, pageSize: 10 }, excl
                             },
                         }
                     ],
-                    order: [
-                        ['createdAt', 'DESC'],
-                    ],
                 }
             ],
             order: order,
@@ -81,14 +123,54 @@ async function getLive(livePayload, pagination = { page: 1, pageSize: 10 }, excl
         // Use findAndCountAll to get both rows and count
         const { rows, count } = await Live.findAndCountAll(query);
 
+        const records = await Promise.all(
+            rows.map(async (row) => {
+                const data = row.toJSON();
+
+                // Audio_stream_hosts is an ARRAY
+                if (
+                    Array.isArray(data.Live_hosts) &&
+                    data.Live_hosts.length > 0
+                ) {
+                    data.Live_hosts = await Promise.all(
+                        data.Live_hosts.map(async (host) => {
+                            if (host.User) {
+                                const levelPayload = {
+                                    level_up: {
+                                        [Op.lte]: Number(host.User.consumption || 0)
+                                    }
+                                };
+                                const framePayload = {
+                                    user_id: host.User.user_id,
+                                    status: true,
+                                    end_time: {
+                                        [Op.gt]: Sequelize.fn('NOW') // active frame
+                                    }
+                                }
+
+                                const level = await getUserLevel(levelPayload, attributes);
+                                const frame = await getUserframe(framePayload);
+
+                                host.User.level = level || null;
+                                host.User.frame = frame || null;
+                            }
+                            return host;
+                        })
+                    );
+                }
+
+                return data;
+            })
+        );
+
         // Prepare the structured response
         return {
-            Records: rows.map(row => row.toJSON()),
+            Records: records, // Return filtered if search term, else return all
             Pagination: {
                 total_pages: Math.ceil(count / pageSize),
                 total_records: Number(count),
-                current_page: Number(page),
-                records_per_page: Number(pageSize),
+                current_page: page,
+                records_per_page: pageSize,
             },
         };
     } catch (error) {
@@ -96,6 +178,7 @@ async function getLive(livePayload, pagination = { page: 1, pageSize: 10 }, excl
         throw error;
     }
 }
+
 async function updateLive(livePayload, updateData, excludedUserIds = []) {
     try {
         // Ensure the provided socialPayload matches the conditions for updating

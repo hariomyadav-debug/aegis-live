@@ -126,7 +126,7 @@ async function getFrame_User(payload) {
 
         return frameUser;
     } catch (error) {
-        console.log('Error for Frame user', error);
+        console.log('Error for find Frame user', error);
         throw error;
     }
 }
@@ -185,7 +185,7 @@ async function getAllFrame_User(payload, attributes = ['frame_id', 'name', 'thum
 
         return rows;
     } catch (error) {
-        console.log('Error for Frame user', error);
+        console.log('Error for get all Frame user', error);
         throw error;
     }
 }

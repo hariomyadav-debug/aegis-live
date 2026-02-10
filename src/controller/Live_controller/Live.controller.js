@@ -655,7 +655,7 @@ async function activity_on_live(socket, data, emitEvent, emitToRoom) {
 async function get_live(req, res) {
 
     const isUser = await getUser({ user_id: req.authData.user_id });
-    const { page = 1, pageSize = 10 } = req.body;
+    const { page = 1, pageSize = 10, search = "" } = req.body;
     // const live_status = req.body.live_status || "live";
     const live_status = "live";
     if (!isUser) {
@@ -672,6 +672,11 @@ async function get_live(req, res) {
     if (process.env.ISDEMO != "true") {
         live_filter.is_demo = false
 
+    }
+
+    // Add search to filter if provided
+    if (search && String(search).trim() !== "") {
+        live_filter.search = search;
     }
 
     const already_live = await getLive(live_filter, { page, pageSize });
@@ -798,12 +803,18 @@ async function get_live(req, res) {
     );
 }
 async function get_live_admin(req, res) {
-    const { page = 1, pageSize = 10 } = req.body;
+    const { page = 1, pageSize = 10, search = "" } = req.body;
 
     const live_status = req.body.live_status || "";
     const { sorted_by = "createdAt", sort_order = "DESC" } = req.body
 
-    const already_live = await getLive({ live_status: live_status }, { page, pageSize }, [], [[sorted_by, sort_order]]);
+    // Build filter with search if provided
+    const filter = { live_status: live_status };
+    if (search && String(search).trim() !== "") {
+        filter.search = search;
+    }
+
+    const already_live = await getLive(filter, { page, pageSize }, [], [[sorted_by, sort_order]]);
 
     if (already_live.Records.length <= 0) {
         return generalResponse(

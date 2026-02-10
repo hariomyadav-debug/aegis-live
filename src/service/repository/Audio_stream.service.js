@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { Sequelize, fn, col, literal } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
+const util = require('util');
 
 const { Audio_stream, User, Audio_stream_host, Coin_to_coin, Level, Frame_user } = require("../../../models");
 const { getUserLevel } = require('./Level.service');
@@ -25,10 +26,34 @@ async function getAudioStream(streamPayload, pagination = { page: 1, pageSize: 1
         const limit = Number(pageSize);
 
         // Build the where condition
-        let wherecondition = { ...streamPayload }; // Default to the provided payload
+        let wherecondition = {};
 
-        if (streamPayload.live_status == "") {
-            delete wherecondition.live_status
+        // Extract search term if provided
+        const searchTerm = streamPayload?.search ? String(streamPayload.search).trim() : '';
+        const isNumeric = !isNaN(searchTerm) && searchTerm !== '';
+
+        // Handle each field from streamPayload except search
+        for (const key in streamPayload) {
+            if (key !== 'search') {
+                wherecondition[key] = streamPayload[key];
+            }
+        }
+
+        if (wherecondition.live_status === "") {
+            delete wherecondition.live_status;
+        }
+
+        // Add search filter if provided
+        if (searchTerm) {
+            wherecondition[Op.or] = [
+                { stream_title: { [Op.iLike]: `%${searchTerm}%` } },
+                { socket_stream_room_id: { [Op.iLike]: `%${searchTerm}%` } },
+                ...(isNumeric ? [{ stream_id: Number(searchTerm) }] : []),
+
+                // 🔥 Host search
+                { '$Audio_stream_hosts.User.full_name$': { [Op.iLike]: `%${searchTerm}%` } },
+                { '$Audio_stream_hosts.User.user_name$': { [Op.iLike]: `%${searchTerm}%` } }
+            ];
         }
 
         // Add pagination options to the payload
@@ -36,14 +61,18 @@ async function getAudioStream(streamPayload, pagination = { page: 1, pageSize: 1
             where: wherecondition,
             limit,
             offset,
+            subQuery: false, // 🔥 MUST
             include: [
                 {
                     model: Audio_stream_host,
+                     as: 'Audio_stream_hosts',
                     where: { is_stream: true },
                     required: true,
+                    where: { is_stream: true },
                     include: [
                         {
                             model: User,
+                             required: !!searchTerm, // 🔥 only INNER JOIN when searching
                             attributes: {
                                 exclude: [
                                     "password",
@@ -85,7 +114,6 @@ async function getAudioStream(streamPayload, pagination = { page: 1, pageSize: 1
 
         // Use findAndCountAll to get both rows and count
         const { rows, count } = await Audio_stream.findAndCountAll(query);
-
 
         const attributes = ['id', 'level_id', 'level_name', 'level_up', 'thumb', 'colour', 'thumb_mark', 'bg'];
 
@@ -131,6 +159,7 @@ async function getAudioStream(streamPayload, pagination = { page: 1, pageSize: 1
         );
 
 
+
         // Prepare the structured response
         return {
             Records: records,
@@ -142,10 +171,12 @@ async function getAudioStream(streamPayload, pagination = { page: 1, pageSize: 1
             },
         };
     } catch (error) {
-        console.error('Error fetching Live:', error);
+        console.error('Error fetching stream:', error);
         throw error;
     }
 }
+
+
 
 async function getUnifiedStreams(payload = {}, pagination = { page: 1, pageSize: 10 }) {
     try {

@@ -1,12 +1,12 @@
     require('dotenv').config()
     const bannerData = [
-        {
-            id: 1,
-            image: `${process.env.baseUrl}/uploads/banner/aegislive-welcome.png`,
-            name: "Item One",
-            type: "webview",
-            url: "https://www.google.com/"
-        },
+        // {
+        //     id: 1,
+        //     image: `${process.env.baseUrl}/uploads/banner/aegislive-welcome.png`,
+        //     name: "Item One",
+        //     type: "webview",
+        //     url: "https://www.google.com/"
+        // },
         {
             id: 2,
             image: `${process.env.baseUrl}/uploads/banner/rules-regulations.png`,

@@ -80,7 +80,7 @@ async function autoStopLiveAtSocketDisc(socket_id, emitEvent, emitToRoom, dispos
             last_seen: Date.now()
         });
         
-        // Start grace timer ONLY ONCE   use for prevent multipl time call seTimeout
+        // Start grace timer ONLY ONCE
         const alreadyStarted = await setRedis(timerKey, "1", 60);
         
         if (alreadyStarted) {
