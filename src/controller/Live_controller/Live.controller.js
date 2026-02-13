@@ -655,7 +655,7 @@ async function activity_on_live(socket, data, emitEvent, emitToRoom) {
 async function get_live(req, res) {
 
     const isUser = await getUser({ user_id: req.authData.user_id });
-    const { page = 1, pageSize = 10, search = "" } = req.body;
+    const { page = 1, pageSize = 10, search = "", region = 0 } = req.body;
     // const live_status = req.body.live_status || "live";
     const live_status = "live";
     if (!isUser) {
@@ -668,7 +668,7 @@ async function get_live(req, res) {
             404
         );
     }
-    let live_filter = { live_status: live_status };
+    let live_filter = { live_status: live_status, region: region };
     if (process.env.ISDEMO != "true") {
         live_filter.is_demo = false
 

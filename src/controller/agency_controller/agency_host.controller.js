@@ -15,6 +15,7 @@ const {
 } = require("../../service/repository/Agency.service");
 const { User, Agency, Agency_user } = require("../../../models");
 const { Op } = require('sequelize');
+const { getInvitationById, sendHostInvitation, isAlreadyMember } = require("../../service/repository/Invitation.service");
 
 /**
  * Get host dashboard
@@ -24,6 +25,8 @@ async function getHostDashboard(req, res) {
     try {
         const { agency_id } = req.body;
         const userId = req.authData?.user_id;
+
+        
 
         if (!agency_id || !userId) {
             return generalResponse(
@@ -40,7 +43,7 @@ async function getHostDashboard(req, res) {
         const hostInfo = await getAgencyUser({
             user_id: userId,
             agency_id: agency_id,
-            state: 1  // approved
+            state: 2  // approved
         });
 
         if (!hostInfo) {
@@ -54,15 +57,10 @@ async function getHostDashboard(req, res) {
             );
         }
 
-        const agency = await getAgencyById({id: agency_id});
-        const user = await User.findOne({ where: { user_id: userId } });
-
         return generalResponse(
             res,
             {
                 host_info: hostInfo,
-                agency: agency,
-                user: user ? { user_id: user.user_id, full_name: user.full_name } : null
             },
             "Host dashboard retrieved",
             true,
@@ -376,7 +374,7 @@ async function updateMemberCommission(req, res) {
  */
 async function applyAsHost(req, res) {
     try {
-        const { agency_id, reason } = req.body;
+        const { agency_id, message="I want to join your agency." } = req.body;
         const userId = req.authData?.user_id;
 
         if (!agency_id) {
@@ -404,13 +402,17 @@ async function applyAsHost(req, res) {
         }
 
         // Check if user is already a member
-        const existingMember = await getAgencyUser({
-            user_id: userId,
-            agency_id: agency_id
+        const isMember = await isAlreadyMember(userId, agency_id);
+
+
+        const existingInvitation = await getInvitationById({
+                user_id: userId,
+                // ref_id: agency_id,
+                status: 0 // pending
         });
 
-        if (existingMember) {
-            if (existingMember.state === 0) {
+        if (isMember || existingInvitation) {
+            if (existingInvitation && existingInvitation.state === 0) {
                 return generalResponse(
                     res,
                     {},
@@ -419,11 +421,11 @@ async function applyAsHost(req, res) {
                     true,
                     400
                 );
-            } else if (existingMember.state === 1) {
+            } else if (isMember) {
                 return generalResponse(
                     res,
                     {},
-                    "Already a member of this agency",
+                    "User is already a member",
                     false,
                     true,
                     400
@@ -431,21 +433,24 @@ async function applyAsHost(req, res) {
             }
         }
 
-        // Create new application
-        const agencyUserPayload = {
-            user_id: userId,
-            agency_id: agency_id,
-            reason: reason || null,
-            state: 0, // pending
-            add_time: Math.floor(Date.now() / 1000),
-            up_time: Math.floor(Date.now() / 1000)
-        };
+        const invitation = await sendHostInvitation(agency_id, userId, userId, "agency", message);
 
-        const newApplication = await createAgencyUser(agencyUserPayload);
+
+        // Create new application
+        // const agencyUserPayload = {
+        //     user_id: userId,
+        //     agency_id: agency_id,
+        //     reason: reason || null,
+        //     state: 0, // pending
+        //     add_time: Math.floor(Date.now() / 1000),
+        //     up_time: Math.floor(Date.now() / 1000)
+        // };
+
+        // const newApplication = await createAgencyUser(agencyUserPayload);
 
         return generalResponse(
             res,
-            newApplication,
+            invitation,
             "Application submitted successfully",
             true,
             true,

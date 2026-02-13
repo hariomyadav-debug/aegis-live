@@ -21,12 +21,21 @@ router.post('/create', agencyController.createAgencyHandler);
 router.post('/search', agencyController.searchAgenciesHandler);
 router.get('/home', agencyOperationsController.getAgencyHome);
 
-
+//  Invitation routes for agency and host
 router.post('/invite/send-to-host', agencyInvitationController.sendInvitationToHost);
-router.post('/invite/my-invitations', agencyInvitationController.getMyInvitations);
 router.post('/invitations/:agency_id', agencyInvitationController.getPendingInvitations);
-router.post('/invite-action', agencyInvitationController.acceptAgencyInvitation);
+
+router.post('/apply-as-host', agencyHostController.applyAsHost);
+router.post('/invite/my-invitations', agencyInvitationController.getMyInvitations);
+router.post('/host-dashboard', agencyHostController.getHostDashboard);
+router.post('/invite-action', agencyInvitationController.actionAgencyInvitation);
+
+
+
+// working on this
 router.post('/invite/:invitation_id/reject', agencyInvitationController.rejectAgencyInvitation);
+router.post('/user/:id/approve', agencyUserController.approveAgencyUserHandler);
+
 
 router.put('/:id', agencyController.updateAgencyHandler);
 router.delete('/:id', agencyController.deleteAgencyHandler);
@@ -58,7 +67,6 @@ router.get('/user/:id', agencyUserController.getAgencyUserHandler);
 router.put('/user/:id', agencyUserController.updateAgencyUserHandler);
 router.delete('/user/:id', agencyUserController.deleteAgencyUserHandler);
 router.post('/user/by-agency', agencyUserController.getAgencyUsersByAgencyHandler);
-router.post('/user/:id/approve', agencyUserController.approveAgencyUserHandler);
 router.post('/user/:id/reject', agencyUserController.rejectAgencyUserHandler);
 
 // ==================== HOST/TEAM MANAGEMENT ROUTES ====================
@@ -68,7 +76,6 @@ router.post('/:agency_id/members', agencyHostController.getTeamMembers);
 router.post('/:agency_id/member/:member_id/remove', agencyHostController.removeMember);
 router.post('/:agency_id/member/:member_id/stats', agencyHostController.getMemberStats);
 router.post('/:agency_id/member/:member_id/commission', agencyHostController.updateMemberCommission);
-router.post('/apply-as-host', agencyHostController.applyAsHost);
 router.post('/search-available', agencyHostController.searchAvailableAgencies);
 
 // ==================== INVITATION ROUTES ====================

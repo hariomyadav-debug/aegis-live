@@ -28,6 +28,12 @@ module.exports = (sequelize, DataTypes) => {
             defaultValue: 0,
         },
 
+        requester_id: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            defaultValue: 0,
+        },
+
         message: {
             type: DataTypes.TEXT,
             allowNull: true,

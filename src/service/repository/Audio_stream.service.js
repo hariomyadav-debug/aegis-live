@@ -6,6 +6,7 @@ const util = require('util');
 const { Audio_stream, User, Audio_stream_host, Coin_to_coin, Level, Frame_user } = require("../../../models");
 const { getUserLevel } = require('./Level.service');
 const { getUserframe } = require('./Store/Frame.service');
+const { REGION_COUNTRIES } = require('../../utils/contries.key');
 
 
 async function createAudioStream(streamPayload) {
@@ -29,12 +30,13 @@ async function getAudioStream(streamPayload, pagination = { page: 1, pageSize: 1
         let wherecondition = {};
 
         // Extract search term if provided
+        const regionId = streamPayload?.region ? String(streamPayload.region).trim() : '';
         const searchTerm = streamPayload?.search ? String(streamPayload.search).trim() : '';
         const isNumeric = !isNaN(searchTerm) && searchTerm !== '';
 
         // Handle each field from streamPayload except search
         for (const key in streamPayload) {
-            if (key !== 'search') {
+            if (key !== 'search' && key !== 'region' && streamPayload[key] !== undefined && streamPayload[key] !== null) {
                 wherecondition[key] = streamPayload[key];
             }
         }
@@ -56,6 +58,49 @@ async function getAudioStream(streamPayload, pagination = { page: 1, pageSize: 1
             ];
         }
 
+        // Add region-based filtering if regionId is provided and not "0"
+        if (regionId && regionId != "0") {
+            const regionCountries = REGION_COUNTRIES[regionId] || [];
+
+            if (regionCountries.length) {
+                const countryNames = regionCountries.map(c => c.name);
+                const shortNames = regionCountries.map(c => c.short_name);
+                const dialCodes = regionCountries.map(c => c.dial_code);
+
+                wherecondition[Op.and] = [
+                    ...(wherecondition[Op.and] || []),
+                    {
+                        [Op.or]: [
+                            // 🌍 country name (any case)
+                            {
+                                '$Audio_stream_hosts.User.country$': {
+                                    [Op.iLike]: { [Op.any]: countryNames }
+                                }
+                            },
+
+                            // 🌍 short name (USA, IND, etc.)
+                            {
+                                '$Audio_stream_hosts.User.country_short_name$': {
+                                    [Op.iLike]: { [Op.any]: shortNames }
+                                }
+                            },
+
+                            // 🌍 dial code (+1, +91, etc.)
+                            {
+                                '$Audio_stream_hosts.User.country_code$': {
+                                    [Op.in]: dialCodes
+                                }
+                            }
+                        ]
+                    }
+                ];
+            }
+        }
+
+
+
+        console.log('Constructed where condition:', util.inspect(wherecondition, { depth: null }), REGION_COUNTRIES[regionId], regionId);
+
         // Add pagination options to the payload
         const query = {
             where: wherecondition,
@@ -65,14 +110,14 @@ async function getAudioStream(streamPayload, pagination = { page: 1, pageSize: 1
             include: [
                 {
                     model: Audio_stream_host,
-                     as: 'Audio_stream_hosts',
+                    as: 'Audio_stream_hosts',
                     where: { is_stream: true },
                     required: true,
                     where: { is_stream: true },
                     include: [
                         {
                             model: User,
-                             required: !!searchTerm, // 🔥 only INNER JOIN when searching
+                            required: !!searchTerm, // 🔥 only INNER JOIN when searching
                             attributes: {
                                 exclude: [
                                     "password",
@@ -82,7 +127,9 @@ async function getAudioStream(streamPayload, pagination = { page: 1, pageSize: 1
                                     "selfie",
                                     "device_token",
                                     "dob",
-                                    // "country_code",
+                                    "country_code",
+                                    "country",
+                                    "country_short_name",
                                     // "mobile_num",
                                     // "login_type",
                                     "gender",
@@ -116,7 +163,7 @@ async function getAudioStream(streamPayload, pagination = { page: 1, pageSize: 1
         const { rows, count } = await Audio_stream.findAndCountAll(query);
 
         const attributes = ['id', 'level_id', 'level_name', 'level_up', 'thumb', 'colour', 'thumb_mark', 'bg'];
-
+        console.log('Fetched rows:', util.inspect(rows, { depth: null }), 'Count:', count);
         // 🔥 Attach level to each user
         const records = await Promise.all(
             rows.map(async (row) => {

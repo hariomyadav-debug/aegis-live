@@ -88,5 +88,17 @@ module.exports = (sequelize, DataTypes) => {
         // underscored: true,         // created_at, updated_at
     });
 
+    Agency_user.associate = (models) => {
+        Agency_user.belongsTo(models.User, {
+            foreignKey: 'user_id',
+            as: 'user',
+        });
+        Agency_user.belongsTo(models.Agency, {
+            foreignKey: 'agency_id',
+            as: 'agency',
+        });
+    };
+    
+
     return Agency_user;
 };

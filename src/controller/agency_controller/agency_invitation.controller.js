@@ -20,6 +20,7 @@ const {
 } = require("../../service/repository/Agency_user.service");
 const { User, Agency, Agency_user, Hostinvite } = require("../../../models");
 const { getUser } = require("../../service/repository/user.service");
+const { Op } = require("sequelize");
 
 /**
  * Send invitation to host to join agency
@@ -27,7 +28,7 @@ const { getUser } = require("../../service/repository/user.service");
  */
 async function sendInvitationToHost(req, res) {
     try {
-        const { agency_id, host_user_id, message } = req.body;
+        const { agency_id, host_user_id, message = "We are inviting you to join our agency!" } = req.body;
         const agencyOwnerId = req.authData?.user_id;
 
         if (!agency_id || !host_user_id) {
@@ -42,7 +43,7 @@ async function sendInvitationToHost(req, res) {
         }
 
         // Verify agency owner
-        const agency = await getAgencyById( {id: agency_id});
+        const agency = await getAgencyById({ id: agency_id });
         if (!agency || agency.user_id !== agencyOwnerId) {
             return generalResponse(
                 res,
@@ -54,7 +55,7 @@ async function sendInvitationToHost(req, res) {
             );
         }
 
-        // Check if host exists
+        // Check if user exists
         const hostUser = await getUser({ user_id: host_user_id });
 
         if (!hostUser) {
@@ -70,15 +71,31 @@ async function sendInvitationToHost(req, res) {
 
         // Check if already member
         const isMember = await isAlreadyMember(host_user_id, agency_id);
-        if (isMember) {
-            return generalResponse(
-                res,
-                {},
-                "User is already a member of the agency",
-                false,
-                true,
-                400
-            );
+        const existingInvitation = await getInvitationById({
+            user_id: host_user_id,
+            // ref_id: agency_id,
+            status: 0 // pending
+        });
+        if (isMember || existingInvitation) {
+            if (existingInvitation && existingInvitation.state === 0) {
+                return generalResponse(
+                    res,
+                    {},
+                    "Application already pending",
+                    false,
+                    true,
+                    400
+                );
+            } else if (isMember) {
+                return generalResponse(
+                    res,
+                    {},
+                    "User is already a member of the agency",
+                    false,
+                    true,
+                    400
+                );
+            }
         }
 
         // Check for pending invitation
@@ -95,7 +112,7 @@ async function sendInvitationToHost(req, res) {
         }
 
         // Send invitation
-        const invitation = await sendHostInvitation(agency_id,  host_user_id, "agency", message);
+        const invitation = await sendHostInvitation(agency_id, host_user_id, req.authData?.user_id, "agency", message);
 
         return generalResponse(
             res,
@@ -127,7 +144,7 @@ async function getMyInvitations(req, res) {
         const { page = 1, pageSize = 20 } = req.body;
         const userId = req.authData?.user_id;
 
-        const invitations = await getUserInvitations(userId, "Agency", { page, pageSize });
+        const invitations = await getUserInvitations({ user_id: userId, requester_id: { [Op.ne]: req.authData?.user_id }, status: 0 }, { page, pageSize });
 
         console.log("User invitations: ", invitations);
         return generalResponse(
@@ -155,9 +172,9 @@ async function getMyInvitations(req, res) {
  * Accept invitation to join agency as host
  * POST /api/agency/invite/:invitation_id/accept
  */
-async function acceptAgencyInvitation(req, res) {
+async function actionAgencyInvitation(req, res) {
     try {
-        const { invitation_id, action } = req.params;
+        const { invitation_id, action, agency_id = 0 } = req.body;
         const userId = req.authData?.user_id;
 
         if (!invitation_id) {
@@ -172,7 +189,7 @@ async function acceptAgencyInvitation(req, res) {
         }
 
         // Get invitation
-        const invitation = await getInvitationById({ id: invitation_id });
+        const invitation = await getInvitationById({ id: invitation_id, ref_type: "agency" });
         if (!invitation) {
             return generalResponse(
                 res,
@@ -184,15 +201,34 @@ async function acceptAgencyInvitation(req, res) {
             );
         }
 
-        if (invitation.user_id !== userId) {
+        // Check if invitation is for this user already a member or not
+        const isMember = await isAlreadyMember(invitation.user_id);
+        if (isMember) {
             return generalResponse(
                 res,
                 {},
-                "This invitation is not for you",
+                "You are already a member",
                 false,
-                false,
-                403
+                true,
+                400
             );
+        }
+
+        // This api can use only agency and user who is invited can accept/reject the invitation. if agency owner is accepting/rejecting the invitation, then return updated pending invitations for that agency. if host is accepting/rejecting the invitation, then return updated invitation details along with agency user record if accepted
+        let agency = null;
+        if ((invitation.user_id !== userId) || (agency_id != 0 && agency_id != invitation.ref_id)) {
+            agency = await getAgency({ id: invitation.ref_id, user_id: userId });
+            agency = agency ? agency.get({ plain: true }) : null;
+            if (!agency || agency.id !== invitation.ref_id) {
+                return generalResponse(
+                    res,
+                    {},
+                    "This invitation is not for you",
+                    false,
+                    false,
+                    403
+                );
+            }
         }
 
         if (invitation.status !== 0) {
@@ -207,26 +243,62 @@ async function acceptAgencyInvitation(req, res) {
         }
 
         // Accept invitation
-        await acceptRejectInvitation({status: 1, action_time: Date.now()} ,{id: invitation_id});
+        await acceptRejectInvitation({ id: invitation_id }, { status: action == "accept" ? 1 : 2, update_time: Date.now() });
 
         // Create agency user record
-        const agencyUser = await createAgencyUser({
-            user_id: userId,
-            agency_id: invitation.agency_id,
-            state: 1, // approved
-            add_time: Math.floor(Date.now() / 1000),
-            up_time: Math.floor(Date.now() / 1000)
-        });
+        let agencyUser = null;
+        if (action == "accept") {
+            agencyUser = await createAgencyUser({
+                user_id: userId,
+                agency_id: invitation.ref_id,
+                state: 2, // approved
+                add_time: Math.floor(Date.now()),
+                up_time: Math.floor(Date.now())
+            });
+        }
 
         const updatedInvitation = await getInvitationById({ id: invitation_id });
 
+        let message = action == "accept" ? "Invitation accepted successfully" : "Invitation rejected successfully";
+
+
+        // when agency owner accepts/rejects an invitation, return updated pending invitations for that agency
+        if ((agency_id != 0) && agency && (agency.id == agency_id)) {
+
+            const sendRequestList = await getAgencyPendingInvitations({
+                ref_id: agency.id,
+                requester_id: agency.user_id,
+                status: 0
+            });
+
+            const getRequestList = await getAgencyPendingInvitations({
+                ref_id: agency.id,
+                requester_id: { [Op.ne]: agency.user_id },
+                status: 0
+            });
+
+            message = action == "accept" ? "Invitation accepted successfully" : "Invitation rejected successfully";
+            return generalResponse(
+                res,
+                {
+                    send_requests: sendRequestList,
+                    receive_requests: getRequestList
+                },
+                message,
+                true,
+                false,
+                200
+            );
+        }
+
+        // when host accepts/rejects an invitation, return updated invitation details along with agency user record if accepted
         return generalResponse(
             res,
             {
                 invitation: updatedInvitation,
                 agency_user: agencyUser
             },
-            "Invitation accepted successfully",
+            message,
             true,
             true,
             200
@@ -345,7 +417,7 @@ async function getPendingInvitations(req, res) {
         }
 
         // Check if user owns this agency
-        const agency = await getAgencyById({id: agency_id});
+        const agency = await getAgencyById({ id: agency_id });
         if (!agency || agency.user_id !== userId) {
             return generalResponse(
                 res,
@@ -357,11 +429,21 @@ async function getPendingInvitations(req, res) {
             );
         }
 
-        const invitations = await getAgencyPendingInvitations(agency_id);
+        const sendRequestList = await getAgencyPendingInvitations({
+            ref_id: agency_id,
+            requester_id: userId,
+            status: 0
+        });
+
+        const getRequestList = await getAgencyPendingInvitations({
+            ref_id: agency_id,
+            requester_id: { [Op.ne]: userId },
+            status: 0
+        });
 
         return generalResponse(
             res,
-            { invitations: invitations },
+            { sendRequests: sendRequestList, getRequests: getRequestList },
             "Pending invitations retrieved",
             true,
             false,
@@ -452,7 +534,7 @@ async function cancelInvitation(req, res) {
 module.exports = {
     sendInvitationToHost,
     getMyInvitations,
-    acceptAgencyInvitation,
+    actionAgencyInvitation,
     rejectAgencyInvitation,
     getPendingInvitations,
     cancelInvitation

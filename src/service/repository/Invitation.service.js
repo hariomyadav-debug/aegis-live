@@ -1,5 +1,5 @@
 const { raw } = require("mysql2");
-const { Hostinvite, Agencyinvite, User, Agency, Agency_user, Role_invite_user } = require("../../../models");
+const { Hostinvite, Agencyinvite, User, Agency, Agency_user, Role_invite_user, Level } = require("../../../models");
 const { Op } = require('sequelize');
 const { get } = require("../../routes/agency.routes");
 const { getAgencyById } = require("./Agency.service");
@@ -20,16 +20,16 @@ async function createHostInvitation(invitationData) {
 /**
  * Get invitations for user
  */
-async function getUserInvitations(userId, ref_type, pagination = { page: 1, pageSize: 20 }) {
+async function getUserInvitations(wherePayload, pagination = { page: 1, pageSize: 20 }) {
     try {
         let { page, pageSize } = pagination;
         page = Number(page);
         pageSize = Number(pageSize);
-        
+
         const offset = (page - 1) * pageSize;
 
         const { rows, count } = await Role_invite_user.findAndCountAll({
-            where: { user_id: userId },
+            where: wherePayload,
             raw: true,
             // limit: pageSize,
             // offset: offset,
@@ -139,10 +139,19 @@ async function isAlreadyMember(userId, agencyId) {
         const member = await Agency_user.findOne({
             where: {
                 user_id: userId,
-                // agency_id: agencyId,
             }
         });
-        return member ? true : false;
+
+        const agency = await Agency.findOne({
+            where: {
+                user_id: userId,
+            }
+        });
+
+        if(member || agency) {
+            return true;
+        }
+        return false;
     } catch (error) {
         console.error('Error checking membership:', error);
         throw error;
@@ -152,14 +161,15 @@ async function isAlreadyMember(userId, agencyId) {
 /**
  * Send invitation to host
  */
-async function sendHostInvitation(agencyId, hostUserId, ref_type = "", message = "") {
+async function sendHostInvitation(agencyId, hostUserId, requester_id, ref_type = "", message = "") {
     try {
         const invitation = await Role_invite_user.create({
             ref_id: agencyId,
             ref_type: ref_type,
             user_id: hostUserId,
+            requester_id: requester_id,
             status: 0, // pending
-            message: message 
+            message: message
         });
         return invitation;
     } catch (error) {
@@ -171,20 +181,45 @@ async function sendHostInvitation(agencyId, hostUserId, ref_type = "", message =
 /**
  * Get pending invitations for agency
  */
-async function getAgencyPendingInvitations(agencyId) {
+async function getAgencyPendingInvitations(wherePayload) {
     try {
         const invitations = await Role_invite_user.findAll({
-            where: {
-                ref_id: agencyId,
-                status: 0
-            },
+            where: wherePayload,
             include: [{
                 model: User,
-                attributes: ['user_id', 'full_name', 'profile_pic']
+                attributes: ['user_id', 'full_name', 'profile_pic', 'consumption']
             }],
             order: [['add_time', 'DESC']]
         });
-        return invitations;
+
+        const levels = await Level.findAll({
+            order: [['level_up', 'ASC']]
+        });
+
+
+        const updatedInvitations = invitations.map(invite => {
+            const user = invite.User;
+
+            let userLevel = null;
+
+            for (let lvl of levels) {
+                if (user.consumption >= lvl.level_up) {
+                    userLevel = lvl;
+                } else {
+                    break;
+                }
+            }
+
+            return {
+                ...invite.toJSON(),
+                User: {
+                    ...user.toJSON(),
+                    level: userLevel
+                }
+            };
+        });
+
+        return updatedInvitations;
     } catch (error) {
         console.error('Error fetching pending invitations:', error);
         throw error;
