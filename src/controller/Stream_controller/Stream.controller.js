@@ -8,7 +8,7 @@ const { getFollow, countFollows } = require("../../service/repository/Follow.ser
 const { sendPushNotification } = require("../../service/common/onesignal.service");
 const { Op } = require('sequelize');
 const { getPk, getPkByIdWith } = require("../../service/repository/Pk.service");
-const { Sequelize } = require("../../../models");
+const { Sequelize, Red_envelope, Red_envelope_record } = require("../../../models");
 const fs = require('fs');
 const path = require('path');
 const { getGift, getOneGift } = require("../../service/repository/Gift.service");
@@ -115,9 +115,9 @@ async function start_audio_stream(socket, data, emitEvent, joinRoom) {
         const new_stream = await getAudioStream({ stream_id: newStream.stream_id })
 
         emitEvent(socket.id, 'stream_livekit_token_details', livekit_details);
-         emitEvent(socket.id, "start_audio_stream", new_stream, data?.emit_type);
+        emitEvent(socket.id, "start_audio_stream", new_stream, data?.emit_type);
 
-         // To handle recconnection and auto end stream at host disconnection
+        // To handle recconnection and auto end stream at host disconnection
         await hsetRedis(redis_keys.liveStream(socket.id), {
             stream_id: newStream.stream_id,
             host_id: isUser.user_id,
@@ -126,7 +126,7 @@ async function start_audio_stream(socket, data, emitEvent, joinRoom) {
             host_socket_id: socket.id,
             type: 'audio',
             last_seen: Date.now()
-        }, 6*60*60);
+        }, 6 * 60 * 60);
         return
 
     }
@@ -545,7 +545,7 @@ async function leave_audio_stream_as_user(socket, data, emitEvent, leaveRoom, em
 
     const already_host = await get_audioStreamHost({ user_id: isUser.user_id, stream_id: already_live.Records[0].stream_id, is_main_host: false, is_stream: true })
     // TODO: check here
-    if ( already_host.Records.length < 1) {
+    if (already_host.Records.length < 1) {
 
         await updateAudioStream(
             {
@@ -942,6 +942,113 @@ async function transparent_activity_handler(socket, data, emitEvent, emitToRoom)
 
 }
 
+async function red_envelope_handler(socket, data, emitEvent, emitToRoom) {
+    const user_id = socket.authData.user_id;
+    console.log("red_envelope data-------------", data);
+    console.log(1);
+    try {
+        if (!data.socket_room_id || !data.user_id || !data.ref_id || !data.ref_type || !data.amount || !data.nums_rob) {
+            console.log(2);
+            return emitEvent(socket.id, "red_envelope", "Data is missing!");
+        }
+        
+        console.log(3);
+        let isUser = await getUser({ user_id: user_id });
+        if (!isUser) {
+            console.log(4);
+            return emitEvent(socket.id, "red_envelope", "User not found!");
+        }
+        
+        console.log(5);
+        // ✅ Verify user has enough diamonds
+        const userDiamond = isUser.diamond || 0;
+        const requiredDiamond = Number(data.amount);
+        const nums_rob = Number(data.nums_rob);
+        if (userDiamond < requiredDiamond) {
+            console.log(6);
+            return emitEvent(socket.id, "red_envelope", {
+                success: false,
+                message: `Insufficient diamonds! You have ${userDiamond}, need ${requiredDiamond}`,
+                current_diamond: userDiamond,
+                required_diamond: requiredDiamond
+            });
+        }
+        
+        console.log(7);
+        const coin_rob =  Math.floor(requiredDiamond / nums_rob);
+        
+        console.log(8);
+        if (coin_rob < 1) {
+            console.log(9);
+            return emitEvent(socket.id, "red_envelope", {
+                success: false,
+                message: `Insufficient diamonds! For ${nums_rob} portions, you need at least ${requiredDiamond * nums_rob} diamonds (1 diamond per portion)`,
+            });
+        }
+        
+        // ✅ Deduct diamonds from user
+        const newDiamondBalance = userDiamond - requiredDiamond;
+        await isUser.update({ diamond: newDiamondBalance });
+        
+        console.log(10);
+        // ✅ Create red envelope record
+        
+        const payload = {
+            user_id: user_id,
+            ref_id: data.ref_id || null,
+            ref_type: data.ref_type || null,
+            type: data.type || "normal",
+            type_grant: data.type_grant || 0,
+            coin: requiredDiamond,
+            nums: 0,
+            des: data.des || "Congratulations on getting rich and good luck!",
+            addtime: Date.now().toString(),
+            status: 0,
+            coin_rob: coin_rob,
+            nums_rob: nums_rob
+        }
+        
+        const envelope = await Red_envelope.create(payload);
+        
+        console.log(11);
+        if (!envelope) {
+            // Refund diamonds if envelope creation fails
+            console.log(12);
+            await isUser.update({ diamond: userDiamond });
+            return emitEvent(socket.id, "red_envelope", "Failed to create red envelope!");
+        }
+        
+        await envelope.reload();
+        
+        console.log(13);
+        // ✅ Emit success event to the room
+        isUser = isUser.get({ plain: true });
+        emitToRoom(data.socket_room_id, 'red_envelope', {
+            success: true,
+            message: `${isUser.full_name} sent a red envelope with ${nums_rob} portions!`,
+            data: {
+                ...envelope.get({ plain: true }),
+                sender_name: isUser.full_name,
+                sender_profile_pic: isUser.profile_pic,
+                sender_level: isUser.level,
+                sender_frame: isUser.frame,
+            }
+        });
+        
+        // ✅ Emit confirmation to sender
+        return ;
+        
+    } catch (error) {
+        console.log(13);
+        console.error("Error in red_envelope:", error);
+        return emitEvent(socket.id, "red_envelope", {
+            success: false,
+            message: "Error creating red envelope!",
+            error: error.message
+        });
+    }
+}
+
 module.exports = {
     start_audio_stream,
     join_audio_stream,
@@ -955,5 +1062,6 @@ module.exports = {
     update_audio_stream_seats,
     audio_stream_seat_lock_unlock,
     sent_invite_by_host_to_join,
-    transparent_activity_handler
+    transparent_activity_handler,
+    red_envelope_handler
 }

@@ -25,6 +25,8 @@ const leaderboard_routes= require("./leaderboard.routes");
 const store_routes = require("./store.routes");
 const level_routes = require('./level.routes');
 const vip_routes = require('./vip.routes');
+const agency_routes = require('./agency.routes');
+const red_envelope_routes = require('./red_envelope.routes');
 
 const { get_Config } = require("../controller/Admin_controller/ProjectConf.controller");
 const pkRoutes = require("./pk.routes");
@@ -63,10 +65,11 @@ router.use("/auth", auth_routes )
 // Conf routes 
 router.get("/project_conf", get_Config)
 
-
 // New addeding
 router.use('/store', store_routes)
 router.use('/level', level_routes)
 router.use('/vip', vip_routes)
+router.use('/agency', agency_routes)
+router.use('/red-envelope', red_envelope_routes)
 
 module.exports = router;

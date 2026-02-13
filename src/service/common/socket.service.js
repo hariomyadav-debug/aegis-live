@@ -16,7 +16,7 @@ const {
   delete_for_me
 } = require("../../controller/chat_controller/Message.controller");
 const { start_live, leave_live, stop_live, join_live, activity_on_live, request_to_be_host, leave_live_as_host, accept_request_for_new_host } = require("../../controller/Live_controller/Live.controller");
-const { start_audio_stream, join_audio_stream, stop_audio_stream, request_to_join_audio_stream, accept_request_to_join_audio_stream, leave_audio_stream_as_user, muted_by_host, mute_toggle_by_host, mute_toggle_by_user, gift_send_to_user, update_audio_stream_seats, audio_stream_seat_lock_unlock, sent_invite_by_host_to_join, transparent_activity_handler } = require("../../controller/Stream_controller/Stream.controller");
+const { start_audio_stream, join_audio_stream, stop_audio_stream, request_to_join_audio_stream, accept_request_to_join_audio_stream, leave_audio_stream_as_user, muted_by_host, mute_toggle_by_host, mute_toggle_by_user, gift_send_to_user, update_audio_stream_seats, audio_stream_seat_lock_unlock, sent_invite_by_host_to_join, transparent_activity_handler, red_envelope_handler } = require("../../controller/Stream_controller/Stream.controller");
 const { pk_battle_request, pk_battle_request_response, pk_webrtc_offer, pk_webrtc_answer, pk_webrtc_ice_candidate, cohost_request, cohost_request_response, cohost_leave, remove_cohost, end_pk, update_pk_score, pk_gift_sending_to_host } = require("../../controller/pk_controller/Pk.controller");
 const { startPkTimerWorker } = require("../../helper/pkTimerWorker");
 const { top_ranking_pk_sender } = require("../../helper/pkSocket.helper.js");
@@ -147,6 +147,10 @@ const initSocket = (serverwithsockets) => {
 
     listenToEvent(socket, "transparent_activity_handler", (data) => {
       transparent_activity_handler(socket, data, emitEvent, emitToRoom);
+    });
+
+    listenToEvent(socket, "red_envelope", (data) => {
+        red_envelope_handler(socket, data, emitEvent, emitToRoom);
     });
 
 

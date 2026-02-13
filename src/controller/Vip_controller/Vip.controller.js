@@ -223,9 +223,9 @@ async function deductUserCoins(userCoin, vip_id, days, price, user_id, transacti
 }
 
 async function applyVips(timestamp, noOfDays, vip_id, user_id, uid, vip_cost, userCoin) {
-    const startTime = new Date(timestamp).getTime();
+    const startTime = new Date(Number(timestamp)).getTime();
     const addTime = Math.floor(Date.now());
-    let endTime = startTime + 86400 * noOfDays;
+    let endTime = startTime + 86400000 * noOfDays;
     user_id = Number(user_id);
     let frameId = 0;
     let carId = 0;
@@ -251,18 +251,18 @@ async function applyVips(timestamp, noOfDays, vip_id, user_id, uid, vip_cost, us
             const userFrame = await getFrame_User({ user_id: Number(user_id), frame_id: frameId });
 
             if (userFrame) {
-                if (userFrame.endtime > addTime) {
-                    endTime = userFrame.endtime + 86400 * noOfDays;
+                if (new Date(userFrame.endtime).getTime() > addTime) {
+                    endTime =  new Date(userFrame.endtime).getTime() + 86400000 * noOfDays;
                 }
-                await updateFrame_User({ end_time: endTime }, { id: userFrame.id });
+                await updateFrame_User({ end_time: new Date(Number(endTime)) }, { id: userFrame.id });
             } else {
 
                 // TODO: correct timestemp
                 await insertFrame_user({
                     user_id: user_id,
                     frame_id: frameId,
-                    add_time: addTime,
-                    end_time: endTime,
+                    add_time: new Date(Number(addTime)),
+                    end_time: new Date(Number(endTime)),
                     // add_time: addTime.toString(),
                     // end_time: endTime.toString(),
                 });
@@ -277,16 +277,16 @@ async function applyVips(timestamp, noOfDays, vip_id, user_id, uid, vip_cost, us
             const userCar = await getMount_User({ user_id: uid, mount_id: carId });
 
             if (userCar) {
-                if (userCar.endtime > addTime) {
-                    endTime = userCar.endtime + 86400 * noOfDays;
+                if (new Date(userCar.endtime).getTime() > addTime) {
+                    endTime =  new Date(userCar.endtime).getTime() + 86400000 * noOfDays;
                 }
-                await updateMount_User({ endtime: endTime }, { id: userCar.id });
+                await updateMount_User({ endtime: new Date(Number(endTime)) }, { id: userCar.id });
             } else {
                 await insertMount_user({
                     uid,
                     car_id: carId,
                     addtime: addTime,
-                    endtime: endTime,
+                    endtime: new Date(Number(endTime)),
                 });
             }
         }
@@ -331,7 +331,7 @@ async function updateVip(
         return { success: false, message: 'Failed to update SVIP record.' };
     }
 
-      await applyVips(timestamp, noOfDays, vip_id, user_id, user_id, vip_cost, userCoin);
+    await applyVips(timestamp, noOfDays, vip_id, user_id, user_id, vip_cost, userCoin);
     return {
         success: true,
         message: `SVIP ${vip_id} for ${noOfDays} days acquired successfully.`,
@@ -348,7 +348,7 @@ async function upgradeAndInsertVIPFunc(
     note,
     userCoin
 ) {
-    if (vipRecord) {
+    if (vipRecord && recordStatus === 1) {
 
         if (vipRecord.vip_id === vipData.id) {
 
@@ -440,6 +440,7 @@ async function acquire_vip(req, res) {
     const u_id = req.authData.user_id;
 
     const timestamp = new Date().getTime();
+    req.body.user_id = u_id;
     try {
 
         const isUser = await getUser({ user_id: u_id });
@@ -522,9 +523,9 @@ async function acquire_vip(req, res) {
                 Number(vipRecord.timestamp) +
                 Number(vipRecord.no_of_days) * 86400000;
             recordStatus = Date.now() < expire ? 1 : 2;
+            console.log("=========>qq", vipRecord, recordStatus, expire);
         }
 
-        console.log("=========>qq", vipData);
         const result = await upgradeAndInsertVIPFunc(
             vipRecord,
             vipData,
@@ -575,176 +576,176 @@ async function acquire_vip(req, res) {
  * Get VIP permissions for a user
  */
 async function getPermissions(req, res) {
-  try {
-   
-    // Fetch VIP record
-    const record = await Vip_record.findOne({
-      where: { user_id: req.authData.user_id },
-      order: [['id', 'DESC']],
-      raw: true,
-    });
+    try {
 
-    if (!record) {
-      return generalResponse(
-        res,
-        { data: null },
-        "Currently you don't have any SVIP!",
-        false,
-        true
-      );
+        // Fetch VIP record
+        const record = await Vip_record.findOne({
+            where: { user_id: req.authData.user_id },
+            order: [['id', 'DESC']],
+            raw: true,
+        });
+
+        if (!record) {
+            return generalResponse(
+                res,
+                { data: null },
+                "Currently you don't have any SVIP!",
+                false,
+                true
+            );
+        }
+
+        // Check if VIP is expired
+        const expireAt = new Date(Number(record.timestamp)).getTime() + record.no_of_days * 24 * 60 * 60 * 1000;
+
+        if (new Date().getTime() > expireAt) {
+            return generalResponse(
+                res,
+                { data: null },
+                "SVIP expired!",
+                false,
+                true
+            );
+        }
+
+        console.log("VIP permissions record:====>", record);
+
+        return generalResponse(
+            res,
+            { data: record },
+            "Success",
+            true,
+            true
+        );
+    } catch (error) {
+        console.error("VIP getPermissions error:", error);
+        return generalResponse(
+            res,
+            { success: false },
+            "Server error",
+            false,
+            true
+        );
     }
-
-    // Check if VIP is expired
-    const expireAt = new Date(Number(record.timestamp)).getTime() + record.no_of_days * 24 * 60 * 60 * 1000;
-    
-    if (new Date().getTime() > expireAt) {
-      return generalResponse(
-        res,
-        { data: null },
-        "SVIP expired!",
-        false,
-        true
-      );
-    }
-
-    console.log("VIP permissions record:====>", record);
-
-    return generalResponse(
-      res,
-      { data: record },
-      "Success",
-      true,
-      true
-    );
-  } catch (error) {
-    console.error("VIP getPermissions error:", error);
-    return generalResponse(
-      res,
-      { success: false },
-      "Server error",
-      false,
-      true
-    );
-  }
 }
 
 /**
  * Toggle VIP permissions
  */
 async function togglePermissions(req, res) {
-  const { type } = req.body;
-  try {
-    const userId = req.authData.user_id;
-    // Fetch VIP record
-    const record = await Vip_record.findOne({
-      where: { user_id: userId },
-      order: [['id', 'DESC']],
-      raw: true,
-    });
+    const { type } = req.body;
+    try {
+        const userId = req.authData.user_id;
+        // Fetch VIP record
+        const record = await Vip_record.findOne({
+            where: { user_id: userId },
+            order: [['id', 'DESC']],
+            raw: true,
+        });
 
-    if (!record) {
-      return generalResponse(
-        res,
-        { success: false },
-        "Currently you don't have any SVIP!",
-        false,
-        true
-      );
-    }
+        if (!record) {
+            return generalResponse(
+                res,
+                { success: false },
+                "Currently you don't have any SVIP!",
+                false,
+                true
+            );
+        }
 
-    // Check if VIP is expired
-    const expireAt = new Date(Number(record.timestamp)).getTime() + record.no_of_days * 24 * 60 * 60 * 1000;
-    
-    if (new Date().getTime() > expireAt) {
-      return generalResponse(
-        res,
-        { success: false },
-        "SVIP expired!",
-        false,
-        true
-      );
-    }
+        // Check if VIP is expired
+        const expireAt = new Date(Number(record.timestamp)).getTime() + record.no_of_days * 24 * 60 * 60 * 1000;
 
-    // Validate permission level requirement
-    const minLevelRequired = {
-      'kicked_out': 2,
-      'hide_gift': 4,
-      'following_room': 5,
-    };
+        if (new Date().getTime() > expireAt) {
+            return generalResponse(
+                res,
+                { success: false },
+                "SVIP expired!",
+                false,
+                true
+            );
+        }
 
-    if (record.vip_id < (minLevelRequired[type] || 0)) {
-      return generalResponse(
-        res,
-        { success: false },
-        `To enable this permission, minimum SVIP ${minLevelRequired[type]} required.`,
-        false,
-        true
-      );
-    }
+        // Validate permission level requirement
+        const minLevelRequired = {
+            'kicked_out': 2,
+            'hide_gift': 4,
+            'following_room': 5,
+        };
 
-    // Update permission
-    const updateData = {};
-    let permissionName = '';
-    let isOn = 'OFF';
+        if (record.vip_id < (minLevelRequired[type] || 0)) {
+            return generalResponse(
+                res,
+                { success: false },
+                `To enable this permission, minimum SVIP ${minLevelRequired[type]} required.`,
+                false,
+                true
+            );
+        }
 
-    switch (type) {
-      case 'kicked_out':
-        updateData.kicked_out = record.kicked_out === 1 ? 0 : 1;
-        isOn = record.kicked_out === 1 ? 'OFF' : 'ON';
-        permissionName = 'Avoid Being Kicked';
-        break;
-      case 'hide_gift':
-        updateData.hide_gift = record.hide_gift === 1 ? 0 : 1;
-        isOn = record.hide_gift === 1 ? 'OFF' : 'ON';
-        permissionName = 'Hide Gift Record';
-        break;
-      case 'following_room':
-        updateData.following_room = record.following_room === 1 ? 0 : 1;
-        isOn = record.following_room === 1 ? 'OFF' : 'ON';
-        permissionName = 'Avoid Following';
-        break;
-      default:
+        // Update permission
+        const updateData = {};
+        let permissionName = '';
+        let isOn = 'OFF';
+
+        switch (type) {
+            case 'kicked_out':
+                updateData.kicked_out = record.kicked_out === 1 ? 0 : 1;
+                isOn = record.kicked_out === 1 ? 'OFF' : 'ON';
+                permissionName = 'Avoid Being Kicked';
+                break;
+            case 'hide_gift':
+                updateData.hide_gift = record.hide_gift === 1 ? 0 : 1;
+                isOn = record.hide_gift === 1 ? 'OFF' : 'ON';
+                permissionName = 'Hide Gift Record';
+                break;
+            case 'following_room':
+                updateData.following_room = record.following_room === 1 ? 0 : 1;
+                isOn = record.following_room === 1 ? 'OFF' : 'ON';
+                permissionName = 'Avoid Following';
+                break;
+            default:
+                return generalResponse(
+                    res,
+                    { success: false },
+                    "Invalid permission!",
+                    false,
+                    true
+                );
+        }
+
+        // Update in database
+        const updated = await Vip_record.update(updateData, {
+            where: { id: record.id },
+        });
+
+        if (!updated || updated[0] === 0) {
+            return generalResponse(
+                res,
+                { success: false },
+                "Failed to update permission!",
+                false,
+                true
+            );
+        }
+
         return generalResponse(
-          res,
-          { success: false },
-          "Invalid permission!",
-          false,
-          true
+            res,
+            { success: true },
+            `${permissionName} ${isOn}`,
+            true,
+            true
+        );
+    } catch (error) {
+        console.error("VIP togglePermissions error:", error);
+        return generalResponse(
+            res,
+            { success: false },
+            "Server error",
+            false,
+            true
         );
     }
-
-    // Update in database
-    const updated = await Vip_record.update(updateData, {
-      where: { id: record.id },
-    });
-
-    if (!updated || updated[0] === 0) {
-      return generalResponse(
-        res,
-        { success: false },
-        "Failed to update permission!",
-        false,
-        true
-      );
-    }
-
-    return generalResponse(
-      res,
-      { success: true },
-      `${permissionName} ${isOn}`,
-      true,
-      true
-    );
-  } catch (error) {
-    console.error("VIP togglePermissions error:", error);
-    return generalResponse(
-      res,
-      { success: false },
-      "Server error",
-      false,
-      true
-    );
-  }
 }
 
 
@@ -752,6 +753,6 @@ module.exports = {
     createVip_levelList,
     getVip_level_WP,
     acquire_vip,
-     getPermissions,
-  togglePermissions,
+    getPermissions,
+    togglePermissions,
 }

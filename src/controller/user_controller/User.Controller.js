@@ -603,8 +603,8 @@ async function geteUserEmoji(req, res) {
 async function getUserByAuth(req, res) {
     try {
         let data = {};
-        const user = await getUser({user_id: req.authData.user_id});
-        if(!user){
+        const user = await getUser({ user_id: req.authData.user_id });
+        if (!user) {
             throw new Error("User not found");
         }
         data.user = {
@@ -612,30 +612,40 @@ async function getUserByAuth(req, res) {
             profile_pic: user.profile_pic,
             consumption: user.consumption
         }
-        if(user.level){
-            data.current_level = user.lavel;
-        }else{
-             let level = await getUserLevel({level_id:  1});
-            data.current_level = level;
+        console.log("=========>user", user.dataValues.level);
+        if (user && user.dataValues && user.dataValues.level) {
+            data.current_level = user.dataValues.level || user.level; 
+        } else {
+            // let level = await getUserLevel({ level_id: 1 });
+            data.current_level = {
+                add_time: "",
+                bg: "",
+                colour: "",
+                level_id: 0,
+                level_name: "",
+                level_up: 0,
+                thumb: "",
+                thumb_mark: ""
+            };
         }
-        
-        
-        let next_level = await getUserLevel({level_id: data.current_level.level_id + 1});
-        if(!next_level){
-            next_level = user.lavel;
+
+
+        let next_level = await getUserLevel({ level_id: data.current_level.level_id + 1 });
+        if (!next_level) {
+            next_level = user.dataValues.level || user.level; 
         }
         data.next_level = next_level;
 
-         return generalResponse(
+        return generalResponse(
             res,
             data,
             "User details",
             true,
             true
         );
-        
+
     } catch (error) {
-         console.error("Error in fetching user data", error);
+        console.error("Error in fetching user data", error);
         return generalResponse(
             res,
             {},

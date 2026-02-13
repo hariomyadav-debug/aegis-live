@@ -34,15 +34,16 @@ const getUsers = async (
         // Handle unified search across multiple fields
         if (filterPayload.search) {
             const searchTerm = filterPayload.search;
-            const orConditions = [
-                { user_name: { [Op.like]: `%${searchTerm}%` } },
-                { full_name: { [Op.like]: `%${searchTerm}%` } },
-                { first_name: { [Op.like]: `%${searchTerm}%` } },
-                { last_name: { [Op.like]: `%${searchTerm}%` } },
-                { email: { [Op.like]: `%${searchTerm}%` } },
-                { mobile_num: { [Op.like]: `%${searchTerm}%` } },
-                { bio: { [Op.like]: `%${searchTerm}%` } }
-            ];
+            const orConditions = [];
+            if (!filterPayload.isNumeric) {
+                orConditions.push({ user_name: { [Op.iLike]: `${searchTerm}%` } });
+                orConditions.push({ full_name: { [Op.iLike]: `%${searchTerm}%` } });
+                orConditions.push({ first_name: { [Op.iLike]: `${searchTerm}%` } });
+                orConditions.push({ last_name: { [Op.iLike]: `${searchTerm}%` } });
+                orConditions.push({ email: { [Op.iLike]: `%${searchTerm}%` } });
+                orConditions.push({ bio: { [Op.iLike]: `%${searchTerm}%` } });
+            }
+
 
             // If the search term is numeric, also search by user_id
             if (filterPayload.isNumeric) {
@@ -53,8 +54,8 @@ const getUsers = async (
         }
         if (filterPayload.user_name) {
             whereCondition.user_name = filterPayload.user_check
-            ? filterPayload.user_name
-            : { [Op.like]: `${filterPayload.user_name}%` };
+                ? filterPayload.user_name
+                : { [Op.like]: `${filterPayload.user_name}%` };
         }
         if (filterPayload.full_name) {
             whereCondition.full_name = { [Op.like]: `%${filterPayload.full_name}%` };
@@ -160,7 +161,7 @@ async function getUser(userPayload, auth = false, deleted = false) {
             }
         });
 
-        if(!isUser){
+        if (!isUser) {
             return isUser;
         }
 

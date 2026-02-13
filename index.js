@@ -118,6 +118,10 @@ app.use((req, res, next) => {
         { name: 'splash_image', maxCount: 50 },
         { name: 'web_logo_light', maxCount: 50 },
         { name: 'web_logo_dark', maxCount: 50 },
+        // agency specific upload fields
+        { name: 'id_front', maxCount: 1 },
+        { name: 'id_back', maxCount: 1 },
+        { name: 'agency_pic', maxCount: 1 },
     ])(req, res, (err) => {
 
         if (err) {

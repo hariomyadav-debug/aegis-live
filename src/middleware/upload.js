@@ -8,10 +8,22 @@ const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     let uploadPath = "";
 
-    switch (req.body.pictureType) {
-      case "id_proof":
-        uploadPath = "./uploads/id_proof";
-        break;
+    // Prefer using file.fieldname when available so different files in same request can
+    // be stored in separate folders (e.g., id_front, id_back, agency_pic).
+    if (file && file.fieldname) {
+      if (file.fieldname === 'id_front' || file.fieldname === 'id_back') {
+        uploadPath = "./uploads/agency/prof";
+      } else if (file.fieldname === 'agency_pic') {
+        uploadPath = "./uploads/agency";
+      }
+    }
+
+    // fallback to pictureType / url based logic
+    if (!uploadPath) {
+      switch (req.body.pictureType) {
+        case "id_proof":
+          uploadPath = "./uploads/id_proof";
+          break;
       case "reel":
         let filemimeType = mime.lookup(file.originalname);
         uploadPath = filemimeType.includes("image")
@@ -70,6 +82,7 @@ const storage = multer.diskStorage({
         else {
           uploadPath = "./uploads/others";
         }
+    }
     }
 
     // Check if directory exists, create it if it doesn't

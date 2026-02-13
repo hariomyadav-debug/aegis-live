@@ -67,14 +67,14 @@ module.exports = (sequelize, DataTypes) => {
         },
 
         add_time: {
-            type: DataTypes.STRING, 
-            defaultValue: () => Date.now().toString(), 
+            type: DataTypes.STRING,
+            defaultValue: () => Date.now().toString(),
             Comment: "Epoch time by generated server side"
         },
 
         update_time: {
-           type: DataTypes.STRING, 
-            defaultValue: () => Date.now().toString(), 
+            type: DataTypes.STRING,
+            defaultValue: () => Date.now().toString(),
             Comment: "Epoch time by generated server side"
         },
 
@@ -134,8 +134,15 @@ module.exports = (sequelize, DataTypes) => {
         },
 
     }, {
+        // freezeTableName: true,
         timestamps: false,        // using addtime/update_time instead
     });
-
+    Agency.associate = function (models) {
+        Agency.belongsTo(models.User, {
+            as: "user",              // ✅ changed
+            foreignKey: "user_id",   // keep this
+            onDelete: "CASCADE"
+        });
+    };
     return Agency;
 };
