@@ -17,7 +17,8 @@ const {
 } = require("../../controller/chat_controller/Message.controller");
 const { start_live, leave_live, stop_live, join_live, activity_on_live, request_to_be_host, leave_live_as_host, accept_request_for_new_host } = require("../../controller/Live_controller/Live.controller");
 const { start_audio_stream, join_audio_stream, stop_audio_stream, request_to_join_audio_stream, accept_request_to_join_audio_stream, leave_audio_stream_as_user, muted_by_host, mute_toggle_by_host, mute_toggle_by_user, gift_send_to_user, update_audio_stream_seats, audio_stream_seat_lock_unlock, sent_invite_by_host_to_join, transparent_activity_handler, red_envelope_handler } = require("../../controller/Stream_controller/Stream.controller");
-const { pk_battle_request, pk_battle_request_response, pk_webrtc_offer, pk_webrtc_answer, pk_webrtc_ice_candidate, cohost_request, cohost_request_response, cohost_leave, remove_cohost, end_pk, update_pk_score, pk_gift_sending_to_host } = require("../../controller/pk_controller/Pk.controller");
+const { pk_battle_request, pk_battle_request_response, pk_webrtc_offer, pk_webrtc_answer, pk_webrtc_ice_candidate, cohost_request, cohost_request_response, cohost_leave, remove_cohost, update_pk_score, pk_gift_sending_to_host } = require("../../controller/pk_controller/Pk.controller");
+const { end_pk } = require("../../controller/pk_controller/PK_sockets.controller");
 const { startPkTimerWorker } = require("../../helper/pkTimerWorker");
 const { top_ranking_pk_sender } = require("../../helper/pkSocket.helper.js");
 const { autoStopLiveAtSocketDisc } = require("../../helper/rejoinSocket.helper.js");
@@ -28,7 +29,7 @@ let io;
 const initSocket = (serverwithsockets) => {
   io = serverwithsockets;
   // 🔥 START TIMER WORKER HERE
-  startPkTimerWorker({ emitToRoom, emitEvent, getRoomMembers });
+  // startPkTimerWorker({ emitToRoom, emitEvent, getRoomMembers });
 
 
   // Set up event listeners for socket connections
@@ -159,7 +160,7 @@ const initSocket = (serverwithsockets) => {
       pk_battle_request(socket, data, emitEvent);
     });
     listenToEvent(socket, "pk_battle_request_response", (data) => {
-      pk_battle_request_response(socket, data, emitEvent, emitToRoom, broadcastEvent);
+      pk_battle_request_response(socket, data, emitEvent, emitToRoom, getRoomMembers, broadcastEvent);
     });
 
     listenToEvent(socket, "update_pk_score", (data) => {
@@ -209,7 +210,7 @@ const initSocket = (serverwithsockets) => {
 
     // Handle disconnection
     socket.on("disconnect", async () => {
-      await updateUser({ socket_id: "" }, { user_id: socket.authData.user_id });
+      await updateUser({ socket_id: "" }, { user_id: socket.authData.user_id });    // TODO: check this later enable this if any issue in showing online status of user
       const isUser = await getUser({ user_id: socket.authData.user_id });
       if (!isUser) {
         return new Error("User not found.");
@@ -291,7 +292,7 @@ const initSocket = (serverwithsockets) => {
 
 // Emit event to a specific socket
 const emitEvent = (socket_id, event, data, type = "") => {
-  console.log('emitdata-----------', event, );
+  // console.log('emitdata-----------', event, );
   // Retrieve the socket instance using the socket_id
   if (type === "all") {
     // Broadcast to all sockets
@@ -420,7 +421,7 @@ const disposeRoom = (roomId) => {
 const emitToRoom = (roomId, event, data) => {
 
   io.in(roomId).fetchSockets().then(sockets => {
-    console.log("Sockets in room:", roomId, sockets.map(s => s.id));
+    // console.log("Sockets in room:", roomId, sockets.map(s => s.id));
   });
 
   if (io) {

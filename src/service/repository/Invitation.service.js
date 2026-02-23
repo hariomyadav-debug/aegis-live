@@ -1,21 +1,10 @@
 const { raw } = require("mysql2");
-const { Hostinvite, Agencyinvite, User, Agency, Agency_user, Role_invite_user, Level } = require("../../../models");
+const {  Agencyinvite, User, Agency, Agency_user, Role_invite_user, Level } = require("../../../models");
 const { Op } = require('sequelize');
 const { get } = require("../../routes/agency.routes");
 const { getAgencyById } = require("./Agency.service");
 
-/**
- * Create host invitation
- */
-async function createHostInvitation(invitationData) {
-    try {
-        const invitation = await Hostinvite.create(invitationData);
-        return invitation;
-    } catch (error) {
-        console.error('Error creating host invitation:', error);
-        throw error;
-    }
-}
+
 
 /**
  * Get invitations for user
@@ -112,24 +101,7 @@ async function acceptRejectInvitation(whereCondition, updatePayload) {
     }
 }
 
-/**
- * Reject invitation
- */
-async function rejectInvitation(invitationId) {
-    try {
-        const invitation = await Hostinvite.update(
-            {
-                status: 2, // rejected
-                action_time: Math.floor(Date.now() / 1000)
-            },
-            { where: { id: invitationId } }
-        );
-        return invitation;
-    } catch (error) {
-        console.error('Error rejecting invitation:', error);
-        throw error;
-    }
-}
+
 
 /**
  * Check if user is already member of agency
@@ -226,30 +198,14 @@ async function getAgencyPendingInvitations(wherePayload) {
     }
 }
 
-/**
- * Delete invitation
- */
-async function deleteInvitation(invitationId) {
-    try {
-        const result = await Hostinvite.destroy({
-            where: { id: invitationId }
-        });
-        return result;
-    } catch (error) {
-        console.error('Error deleting invitation:', error);
-        throw error;
-    }
-}
+
 
 module.exports = {
-    createHostInvitation,
     getUserInvitations,
     getInvitationById,
     hasPendingInvitation,
     acceptRejectInvitation,
-    rejectInvitation,
     isAlreadyMember,
     sendHostInvitation,
     getAgencyPendingInvitations,
-    deleteInvitation
 };

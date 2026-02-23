@@ -228,10 +228,17 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 0
     },
+    money: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      defaultValue: 0,
+      comment: "User money balance (for other operations)"
+    },
     diamond: {
       type: DataTypes.BIGINT,
       allowNull: false,
-      defaultValue: 0
+      defaultValue: 0,
+      comment: "User diamond balance for exchanges/transfers"
     },
     // Bank Related Tasks
     account_name: {

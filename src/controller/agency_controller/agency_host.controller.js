@@ -86,21 +86,22 @@ async function getHostDashboard(req, res) {
  */
 async function getTeamMembers(req, res) {
     try {
-        const { agency_id } = req.params;
-        const { page = 1, pageSize = 20, state } = req.body;
+        const userId = req.authData.user_id;
+        const { page = 1, pageSize = 20, state=2 } = req.body;
 
-        if (!agency_id) {
+        const agency = await getAgencyById({ user_id: userId, state: 2 });
+        if (!agency) {
             return generalResponse(
                 res,
                 {},
-                "Agency ID required",
+                "Agency not found",
                 false,
                 true,
                 400
             );
         }
 
-        const filterPayload = { agency_id: parseInt(agency_id) };
+        const filterPayload = { agency_id: parseInt(agency.id) };
         if (state !== undefined && state !== null) {
             filterPayload.state = state;
         }
@@ -108,7 +109,7 @@ async function getTeamMembers(req, res) {
         const includeOptions = [
             {
                 model: User,
-                as: 'User',
+                as: 'user',
                 attributes: ['user_id', 'full_name', 'user_name', 'profile_pic']
             }
         ];
@@ -168,8 +169,8 @@ async function removeMember(req, res) {
         }
 
         // Check if requester is agency owner
-        const agency = await getAgencyById({id: agency_id});
-        if (!agency || agency.user_id !== userId) {
+        const agency = await getAgencyById({id: agency_id, state: 2, user_id: userId});
+        if (!agency) {
             return generalResponse(
                 res,
                 {},

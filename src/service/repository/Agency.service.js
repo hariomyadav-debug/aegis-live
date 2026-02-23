@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Agency } = require("../../../models");
+const { Agency, User } = require("../../../models");
 
 /**
  * Create a new Agency
@@ -73,6 +73,17 @@ async function getAgencyById(payload, includeOptions = []) {
  * Get agency by condition
  */
 async function getAgency(condition, includeOptions = []) {
+
+    if(includeOptions.length === 0) {
+        includeOptions = [
+            {   
+                model: User,
+                as: "user",
+                attributes: ['user_id', 'full_name', 'user_name', 'profile_pic', 'available_coins', 'diamond']
+            }
+        ]
+    }
+
     try {
         const agency = await Agency.findOne({
             where: condition,

@@ -11,6 +11,8 @@ const filterData = require("../helper/filter.helper");
 const {
   initial_onlineList,
 } = require("../controller/chat_controller/Message.controller");
+const { getAgency } = require("../service/repository/Agency.service");
+const { getAgencyUser } = require("../service/repository/Agency_user.service");
 
 
 async function authMiddleware(req, res, next) {
@@ -21,7 +23,7 @@ async function authMiddleware(req, res, next) {
   } else {
     if (req.headers.authorization.split(" ")[0] !== "Bearer") {
       return res.status(401).json({ success: false, error: "Invalid token!" });
-        }
+    }
 
     try {
       // check if the token is valid or not
@@ -29,33 +31,33 @@ async function authMiddleware(req, res, next) {
         req.headers.authorization.split(" ")[1], // auth token
         process.env.screteKey
       );
-      
+
       if (req?.authData?.user_id) {
-        
-        let isUser = await user_service.getUser({ user_id: req.authData.user_id, is_deleted : false} ,false ,true);
-            if (!isUser) {
-                return generalResponse(res, {}, "No User found", false, true, 401);
-            }
-            req.userData = isUser.toJSON();
-            req.user_type = "user";
+
+        let isUser = await user_service.getUser({ user_id: req.authData.user_id, is_deleted: false }, false, true);
+        if (!isUser) {
+          return generalResponse(res, {}, "No User found", false, true, 401);
+        }
+        req.userData = isUser.toJSON();
+        req.user_type = "user";
 
       }
       if (req?.authData?.admin_id) {
         let is_admin = await admin_service.getAdmin({ admin_id: req.authData.admin_id });
 
         if (!is_admin) {
-                return generalResponse(res, {}, "No Admin found", false, true, 401);
-            }
-        req.adminData = is_admin.toJSON();
-            req.user_type = "admin";
+          return generalResponse(res, {}, "No Admin found", false, true, 401);
         }
+        req.adminData = is_admin.toJSON();
+        req.user_type = "admin";
+      }
     } catch (error) {
       console.error(error);
       return res
         .status(401)
         .json({ message: "Invalid token!", success: false });
     }
-}
+  }
   next();
 }
 
@@ -64,9 +66,9 @@ const soketAuthMiddleware = async (socket, next) => {
   // Retrieve the token from the headers
   const authToken = socket.handshake.headers["token"] || socket.handshake.auth.token;
 
-  
+
   if (!authToken) {
-    
+
     return next(new Error("Missing token during connection."));
   }
 
@@ -74,7 +76,7 @@ const soketAuthMiddleware = async (socket, next) => {
     const jwtSecretKey = process.env.screteKey; // Ensure the environment variable is correctly set
     // Verify the token and decode the user data
     const authData = jwt.verify(authToken, jwtSecretKey);
-    
+
     // Initialize authData on the socket
     socket.authData = { user_id: authData.user_id };
 
@@ -82,7 +84,7 @@ const soketAuthMiddleware = async (socket, next) => {
     const isUser = await user_service.getUser({
       user_id: socket.authData.user_id,
     });
-    
+
     if (!isUser) {
       return next(new Error("User not found."));
     }
@@ -152,11 +154,11 @@ const soketAuthMiddleware = async (socket, next) => {
             chats.user_id != socket.authData.user_id
           )
 
-          emitEvent(
-            chats.User.socket_id,
-            "online_user",
-            user_data
-          );
+            emitEvent(
+              chats.User.socket_id,
+              "online_user",
+              user_data
+            );
         });
       });
     }
@@ -170,4 +172,46 @@ const soketAuthMiddleware = async (socket, next) => {
   }
 };
 
-module.exports = { authMiddleware, soketAuthMiddleware };
+
+const agencyAuthMiddleware = async (req, res, next) => {
+
+  const user_id = req?.authData?.user_id;
+  try {
+    let agency = await getAgency({ user_id: user_id, state: 2 });
+    if (!agency) {
+       agency = await getAgencyUser({ user_id: user_id, state: 2 });
+       req.role_details = agency; // Attach the agency data to the request object for later use
+       if(!agency) {
+         return generalResponse(res, {}, "This access is not allowed, only for agency members.", false, true, 404);
+        }
+      }
+      req.role_details = agency; // Attach the agency data to the request object for later use
+      
+  } catch (error) {
+    console.error(error);
+    return res
+      .status(401)
+      .json({ message: "Invalid access!", success: false });
+  }
+  next();
+}
+
+const agencyHostAuthMiddleware = async (req, res, next) => {
+
+  const user_id = req?.authData?.user_id;
+  try {
+    const agency = await getAgencyUser({ user_id: user_id, state: 2 });
+    if (!agency) {
+      return generalResponse(res, {}, "You are not an agency member.", false, true, 404);
+    }
+    req.role_details = agency; // Attach the agency data to the request object for later use
+  } catch (error) {
+    console.error(error);
+    return res
+      .status(401)
+      .json({ message: "Invalid token!", success: false });
+  }
+  next();
+}
+
+module.exports = { authMiddleware, soketAuthMiddleware, agencyAuthMiddleware, agencyHostAuthMiddleware };

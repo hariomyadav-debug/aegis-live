@@ -111,189 +111,190 @@ async function getLive(livePayload, pagination = { page: 1, pageSize: 10 }, excl
         }
 
 
-            // Build query with distinct for accurate counting
-            const query = {
-                where: wherecondition,
-                limit,
-                offset,
-                subQuery: false, // 🔥 MUST
-                include: [
-                    {
-                        model: Live_host,
-                        as: 'Live_hosts',
-                        where: { is_live: true },
-                        required: true,
-                        where: { is_live: true },
-                        include: [
-                            {
-                                model: User,
-                                required: !!searchTerm, // 🔥 only INNER JOIN when searching
-                                attributes: {
-                                    exclude: [
-                                        "password",
-                                        "otp",
-                                        "social_id",
-                                        "id_proof",
-                                        "selfie",
-                                        "device_token",
-                                        "dob",
-                                        "gender",
-                                        "state",
-                                        "city",
-                                        "bio",
-                                        "login_verification_status",
-                                        "is_private",
-                                        "is_admin",
-                                        "intrests",
-                                        "socket_id",
-                                        "available_coins",
-                                        "account_name",
-                                        "account_number",
-                                        "bank_name",
-                                        "swift_code",
-                                        "IFSC_code"
-                                    ],
-                                },
-                            }
-                        ],
-                    }
-                ],
-                order: order,
-            };
+        // Build query with distinct for accurate counting
+        const query = {
+            where: wherecondition,
+            limit,
+            offset,
+            subQuery: false, // 🔥 MUST
+            include: [
+                {
+                    model: Live_host,
+                    as: 'Live_hosts',
+                    where: { is_live: true },
+                    required: true,
+                    where: { is_live: true },
+                    include: [
+                        {
+                            model: User,
+                            required: !!searchTerm, // 🔥 only INNER JOIN when searching
+                            attributes: {
+                                exclude: [
+                                    "password",
+                                    "otp",
+                                    "social_id",
+                                    "id_proof",
+                                    "selfie",
+                                    "device_token",
+                                    "dob",
+                                    "gender",
+                                    "state",
+                                    "city",
+                                    "bio",
+                                    "login_verification_status",
+                                    "is_private",
+                                    "is_admin",
+                                    "intrests",
+                                    "socket_id",
+                                    "available_coins",
+                                    "account_name",
+                                    "account_number",
+                                    "bank_name",
+                                    "swift_code",
+                                    "IFSC_code"
+                                ],
+                            },
+                        }
+                    ],
+                }
+            ],
+            order: order,
+        };
 
-            // Use findAndCountAll to get both rows and count
-            const { rows, count } = await Live.findAndCountAll(query);
+        // Use findAndCountAll to get both rows and count
+        const { rows, count } = await Live.findAndCountAll(query);
+        const attributes = ['id', 'level_id', 'level_name', 'level_up', 'thumb', 'colour', 'thumb_mark', 'bg'];
 
-            const records = await Promise.all(
-                rows.map(async (row) => {
-                    const data = row.toJSON();
+        const records = await Promise.all(
+            rows.map(async (row) => {
+                const data = row.toJSON();
 
-                    // Audio_stream_hosts is an ARRAY
-                    if (
-                        Array.isArray(data.Live_hosts) &&
-                        data.Live_hosts.length > 0
-                    ) {
-                        data.Live_hosts = await Promise.all(
-                            data.Live_hosts.map(async (host) => {
-                                if (host.User) {
-                                    const levelPayload = {
-                                        level_up: {
-                                            [Op.lte]: Number(host.User.consumption || 0)
-                                        }
-                                    };
-                                    const framePayload = {
-                                        user_id: host.User.user_id,
-                                        status: true,
-                                        end_time: {
-                                            [Op.gt]: Sequelize.fn('NOW') // active frame
-                                        }
+                // Audio_stream_hosts is an ARRAY
+                if (
+                    Array.isArray(data.Live_hosts) &&
+                    data.Live_hosts.length > 0
+                ) {
+                    data.Live_hosts = await Promise.all(
+                        data.Live_hosts.map(async (host) => {
+                            if (host.User) {
+                                const levelPayload = {
+                                    level_up: {
+                                        [Op.lte]: Number(host.User.consumption || 0)
                                     }
-
-                                    const level = await getUserLevel(levelPayload, attributes);
-                                    const frame = await getUserframe(framePayload);
-
-                                    host.User.level = level || null;
-                                    host.User.frame = frame || null;
+                                };
+                                const framePayload = {
+                                    user_id: host.User.user_id,
+                                    status: true,
+                                    end_time: {
+                                        [Op.gt]: Sequelize.fn('NOW') // active frame
+                                    }
                                 }
-                                return host;
-                            })
-                        );
-                    }
 
-                    return data;
-                })
-            );
+                                const level = await getUserLevel(levelPayload, attributes);
+                                const frame = await getUserframe(framePayload);
 
-            // Prepare the structured response
-            return {
-                Records: records, // Return filtered if search term, else return all
-                Pagination: {
-                    total_pages: Math.ceil(count / pageSize),
-                    total_records: Number(count),
-                    current_page: page,
-                    records_per_page: pageSize,
-                },
-            };
-        } catch (error) {
-            console.error('Error fetching Live:', error);
-            throw error;
-        }
+                                host.User.level = level || null;
+                                host.User.frame = frame || null;
+                            }
+                            return host;
+                        })
+                    );
+                }
+
+                return data;
+            })
+        );
+
+        // Prepare the structured response
+        return {
+            Records: records, // Return filtered if search term, else return all
+            Pagination: {
+                total_pages: Math.ceil(count / pageSize),
+                total_records: Number(count),
+                current_page: page,
+                records_per_page: pageSize,
+            },
+        };
+    } catch (error) {
+        console.error('Error fetching Live:', error);
+        throw error;
     }
+}
 
 async function updateLive(livePayload, updateData, excludedUserIds = []) {
-        try {
-            // Ensure the provided socialPayload matches the conditions for updating
-            // const { user_id, ...whereConditions } = socialPayload;
+    try {
+        // Ensure the provided socialPayload matches the conditions for updating
+        // const { user_id, ...whereConditions } = socialPayload;
 
-            // Add the excluded user IDs condition if necessary
-            // const updateQuery = {
-            //     where: {
-            //         ...whereConditions,
-            //         user_id: {
-            //             [Sequelize.Op.notIn]: excludedUserIds, // Exclude user_ids from the list
-            //         }
-            //     },
-            // };
+        // Add the excluded user IDs condition if necessary
+        // const updateQuery = {
+        //     where: {
+        //         ...whereConditions,
+        //         user_id: {
+        //             [Sequelize.Op.notIn]: excludedUserIds, // Exclude user_ids from the list
+        //         }
+        //     },
+        // };
 
-            // Use the update method to update the records
-            const [updatedCount] = await Live.update(updateData, { where: livePayload });
+        // Use the update method to update the records
+        const [updatedCount] = await Live.update(updateData, { where: livePayload });
 
-            // Return a structured response
-            return {
-                message: updatedCount > 0 ? 'Update successful' : 'No records updated',
-                updated_count: updatedCount,
-            };
-        } catch (error) {
-            console.error('Error updating Live:', error);
-            throw error;
-        }
+        // Return a structured response
+        return {
+            message: updatedCount > 0 ? 'Update successful' : 'No records updated',
+            updated_count: updatedCount,
+        };
+    } catch (error) {
+        console.error('Error updating Live:', error);
+        throw error;
     }
+}
 
-    async function deleteLive(livePayload) {
-        try {
-            // Use the destroy method to delete the records
+async function deleteLive(livePayload) {
+    try {
+        // Use the destroy method to delete the records
 
-            const [deletedCount] = await Live.update({ live_status: "stopped" }, { where: livePayload });
+        const [deletedCount] = await Live.update({ live_status: "stopped" }, { where: livePayload });
 
-            // Return a structured response
-            return {
-                message: deletedCount > 0 ? 'Delete successful' : 'No records deleted',
-                deleted_count: deletedCount,
-            };
-        } catch (error) {
-            console.error('Error deleting Live:', error);
-            throw error;
-        }
+        // Return a structured response
+        return {
+            message: deletedCount > 0 ? 'Delete successful' : 'No records deleted',
+            deleted_count: deletedCount,
+        };
+    } catch (error) {
+        console.error('Error deleting Live:', error);
+        throw error;
     }
+}
 
-    async function getLiveCount(livePayload) {
-        try {
+async function getLiveCount(livePayload) {
+    try {
 
-            const count = await Live.count({
-                where: livePayload,
-            });
+        const count = await Live.count({
+            where: livePayload,
+        });
 
-            return count;
-        } catch (error) {
-            console.error('Error in Live count:', error);
-        }
+        return count;
+    } catch (error) {
+        console.error('Error in Live count:', error);
     }
+}
 
-    /**
-     * Generate a unique room ID
-     * @returns {string} - Unique room ID
-     */
-    const generateRoomId = () => {
-        const roomId = uuidv4().replace(/-/g, ''); // Remove dashes for a cleaner ID
-        return roomId;
-    };
+/**
+ * Generate a unique room ID
+ * @returns {string} - Unique room ID
+ */
+const generateRoomId = () => {
+    const roomId = uuidv4().replace(/-/g, ''); // Remove dashes for a cleaner ID
+    return roomId;
+};
 
 
-    module.exports = {
-        createLive,
-        getLive,
-        updateLive,
-        deleteLive,
-        generateRoomId,
-        getLiveCount
-    }
+module.exports = {
+    createLive,
+    getLive,
+    updateLive,
+    deleteLive,
+    generateRoomId,
+    getLiveCount
+}

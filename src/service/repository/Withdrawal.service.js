@@ -78,13 +78,13 @@ async function getAvailableBalance(userId) {
     try {
         const user = await User.findOne({
             where: { user_id: userId },
-            attributes: ['money']
+            attributes: ['diamond']
         });
 
         if (!user) return 0;
 
         const pending = await getPendingWithdrawalAmount(userId);
-        return Math.max(0, user.money - pending);
+        return Math.max(0, user.diamond - pending);
     } catch (error) {
         console.error('Error getting available balance:', error);
         throw error;

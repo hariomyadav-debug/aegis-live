@@ -4,11 +4,9 @@ const {
     getUserInvitations,
     getInvitationById,
     acceptRejectInvitation,
-    rejectInvitation,
     isAlreadyMember,
     hasPendingInvitation,
     getAgencyPendingInvitations,
-    deleteInvitation
 } = require("../../service/repository/Invitation.service");
 const {
     getAgencyById,
@@ -18,7 +16,7 @@ const {
     createAgencyUser,
     getAgencyUser
 } = require("../../service/repository/Agency_user.service");
-const { User, Agency, Agency_user, Hostinvite } = require("../../../models");
+const { User, Agency, Agency_user } = require("../../../models");
 const { getUser } = require("../../service/repository/user.service");
 const { Op } = require("sequelize");
 
@@ -316,85 +314,6 @@ async function actionAgencyInvitation(req, res) {
     }
 }
 
-/**
- * Reject invitation
- * POST /api/agency/invite/:invitation_id/reject
- */
-async function rejectAgencyInvitation(req, res) {
-    try {
-        const { invitation_id } = req.params;
-        const userId = req.authData?.user_id;
-
-        if (!invitation_id) {
-            return generalResponse(
-                res,
-                {},
-                "Invitation ID required",
-                false,
-                true,
-                400
-            );
-        }
-
-        // Get invitation
-        const invitation = await getInvitationById({ id: invitation_id });
-        if (!invitation) {
-            return generalResponse(
-                res,
-                {},
-                "Invitation not found",
-                false,
-                false,
-                404
-            );
-        }
-
-        if (invitation.user_id !== userId) {
-            return generalResponse(
-                res,
-                {},
-                "This invitation is not for you",
-                false,
-                false,
-                403
-            );
-        }
-
-        if (invitation.status !== 0) {
-            return generalResponse(
-                res,
-                {},
-                "Invitation is no longer pending",
-                false,
-                true,
-                400
-            );
-        }
-
-        // Reject invitation
-        await rejectInvitation(invitation_id);
-        const updatedInvitation = await getInvitationById({ id: invitation_id });
-
-        return generalResponse(
-            res,
-            updatedInvitation,
-            "Invitation rejected successfully",
-            true,
-            true,
-            200
-        );
-    } catch (error) {
-        console.error("Error rejecting invitation", error);
-        return generalResponse(
-            res,
-            { success: false },
-            "Error rejecting invitation",
-            false,
-            true,
-            500
-        );
-    }
-}
 
 /**
  * Get pending invitations for agency
@@ -508,7 +427,7 @@ async function cancelInvitation(req, res) {
         }
 
         // Delete invitation
-        await deleteInvitation(invitation_id);
+        // await deleteInvitation(invitation_id);
 
         return generalResponse(
             res,
@@ -535,7 +454,6 @@ module.exports = {
     sendInvitationToHost,
     getMyInvitations,
     actionAgencyInvitation,
-    rejectAgencyInvitation,
     getPendingInvitations,
     cancelInvitation
 };

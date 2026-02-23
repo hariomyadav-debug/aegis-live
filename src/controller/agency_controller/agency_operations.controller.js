@@ -2,7 +2,6 @@ const { generalResponse } = require("../../helper/response.helper");
 const {
     createTransfer,
     getTransferHistory,
-    checkBalance,
     deductMoney,
     addMoney,
     getTransferTotal
@@ -22,6 +21,22 @@ const {
     updateWithdrawalStatus,
     generateOrderNumber
 } = require("../../service/repository/Withdrawal.service");
+const {
+    getAgencyUsers,
+    getAgencyUserById,
+    getAgencyUser,
+    updateAgencyUser,
+    deleteAgencyUser,
+    getAgencyUsersByAgencyId,
+    getUsersByAgencyId
+} = require("../../service/repository/Agency_user.service");
+const {
+    getAgencies,
+    getAgencyById,
+    getAgency
+} = require("../../service/repository/Agency.service");
+const { getUser } = require("../../service/repository/user.service");
+
 const { User, Agency, Agency_user } = require("../../../models");
 const { Op } = require('sequelize');
 
@@ -44,7 +59,6 @@ async function getAgencyHome(req, res) {
             );
         }
 
-        console.log("getAgencyHome called with user_id:", user_id);
         const agency = await Agency.findOne({
             where: { user_id: user_id, state: 2 }, // 1 = approved
             include: [{
@@ -55,7 +69,6 @@ async function getAgencyHome(req, res) {
                 attributes: ['user_id', 'full_name', 'user_name', 'profile_pic', 'available_coins', 'diamond']
             }]
         });
-        console.log("getAgencyHome agency:", agency);
 
         if (!agency) {
             return generalResponse(
@@ -68,6 +81,13 @@ async function getAgencyHome(req, res) {
             );
         }
 
+        console.log("Agency found:", agency);
+
+        const totalHosts = await Agency_user.count({
+            where: { agency_id: agency.id, state: 2 } // 2 = approved
+        });
+
+        agency.dataValues.total_hosts = totalHosts;
 
         return generalResponse(
             res,
@@ -92,16 +112,17 @@ async function getAgencyHome(req, res) {
     }
 }
 
+
+
 /**
  * Get agency wallet  
  * POST /api/agency/wallet
  */
 async function getAgencyWallet(req, res) {
     try {
-        const { user_id } = req.body;
         const authUserId = req.authData?.user_id;
 
-        if (!user_id) {
+        if (!authUserId) {
             return generalResponse(
                 res,
                 {},
@@ -112,14 +133,20 @@ async function getAgencyWallet(req, res) {
             );
         }
 
-        // Check if user is agency owner or member
-        const agency = await Agency.findOne({
-            where: { user_id: user_id, state: 1 }
-        });
+        const includeOptions = [
+            {
+                model: User,
+                as: 'user',
+                where: { user_id: authUserId },
+                required: false,
+                attributes: ['user_id', 'full_name', 'user_name', 'profile_pic', 'available_coins', 'diamond']
+            }
+        ];
 
-        const agencyMember = await Agency_user.findOne({
-            where: { user_id: user_id, state: 1 }
-        });
+        // Check if user is agency owner or member
+        const agency = await getAgency({ user_id: authUserId, state: 2 }, includeOptions); // 2 = approved
+
+        const agencyMember = await getAgencyUser({ user_id: authUserId, state: 2 }, includeOptions);
 
         if (!agency && !agencyMember) {
             return generalResponse(
@@ -132,20 +159,11 @@ async function getAgencyWallet(req, res) {
             );
         }
 
-        const user = await User.findOne({
-            where: { user_id: user_id }
-        });
 
         return generalResponse(
             res,
             {
-                user: {
-                    user_id: user.user_id,
-                    full_name: user.full_name,
-                    money: user.money,
-                    coin: user.coin || 0
-                },
-                agency: agency || agencyMember
+                data: agency || agencyMember
             },
             "Wallet data retrieved",
             true,
@@ -173,6 +191,18 @@ async function transferMoney(req, res) {
     try {
         const { to_user_id, amount } = req.body;
         const fromUserId = req.authData?.user_id;
+        const clientIp = req.ip || req.connection.remoteAddress;
+
+        if(to_user_id === fromUserId) {
+            return generalResponse(
+                res,
+                {},
+                "You cannot transfer to yourself",
+                false,
+                true,
+                400
+            );
+        }
 
         if (!fromUserId || !to_user_id || !amount) {
             return generalResponse(
@@ -185,7 +215,7 @@ async function transferMoney(req, res) {
             );
         }
 
-        if (!Number.isInteger(amount) || amount <= 0) {
+        if (!Number.isInteger(parseFloat(amount)) || parseFloat(amount) <= 0) {
             return generalResponse(
                 res,
                 {},
@@ -197,12 +227,16 @@ async function transferMoney(req, res) {
         }
 
         // Check if sender has enough balance
-        const hasBalance = await checkBalance(fromUserId, amount);
-        if (!hasBalance) {
+        // get sender's current balance
+        const fromUser = await getUser({
+            user_id: fromUserId
+        });
+        if (!fromUser || fromUser.diamond < parseFloat(amount)) {
+            let message = !fromUser ? "Sender not found" : "Insufficient balance";
             return generalResponse(
                 res,
                 {},
-                "Insufficient balance",
+                message,
                 false,
                 true,
                 400
@@ -210,18 +244,18 @@ async function transferMoney(req, res) {
         }
 
         // Check if recipient exists
-        const toUser = await User.findOne({
-            where: { user_id: to_user_id }
+        const toUser = await getUser({
+            user_id: to_user_id
         });
 
         if (!toUser) {
             return generalResponse(
                 res,
                 {},
-                "Recipient not found",
+                "Recipient user not found",
                 false,
-                false,
-                404
+                true,
+                400
             );
         }
 
@@ -230,13 +264,20 @@ async function transferMoney(req, res) {
             from_user_id: fromUserId,
             to_user_id: to_user_id,
             amount: amount,
+            closing: (fromUser.diamond || 0) - parseInt(amount),
+            Balance: (fromUser.diamond || 0) - parseInt(amount),
             description: "Transfer",
-            status: 1 // completed
+            add_time: Date.now().toString(),
+            status: 1, // completed
+            ip: clientIp
         });
 
         return generalResponse(
             res,
-            transfer,
+            {
+                transfer: transfer,
+                message: 'Transfer completed successfully'
+            },
             "Transfer completed successfully",
             true,
             true,
@@ -271,11 +312,11 @@ async function getTransferHistoryHandler(req, res) {
             ]
         };
 
-        const history = await getTransferHistory(filters, { page, pageSize });
+        const history = await getTransferHistory(filters, { page, pageSize }, userId);
 
         return generalResponse(
             res,
-            history,
+            {history, data: req.role_details},
             "Transfer history retrieved",
             true,
             false,
@@ -328,8 +369,8 @@ async function exchangeMoneyForCoins(req, res) {
         }
 
         // Check balance
-        const user = await User.findOne({ where: { user_id: userId } });
-        if (!user || user.money < amount) {
+        const user = await getUser({ user_id: userId });
+        if (!user || user.diamond < Number(amount)) {
             return generalResponse(
                 res,
                 {},
@@ -347,19 +388,20 @@ async function exchangeMoneyForCoins(req, res) {
         // Create exchange record
         const exchange = await createExchangeRecord({
             user_id: userId,
-            cash_amount: amount,
-            coin_amount: coins,
+            coin: coins,
             exchange_rate: rate,
             status: 1,
-            add_time: Math.floor(Date.now() / 1000)
-        });
+            order_no: generateOrderNumber(userId),
+            add_time: Date.now().toString()
+        }, Number(amount));
 
         return generalResponse(
             res,
             {
                 exchange: exchange,
                 coins_earned: coins,
-                rate: rate
+                rate: rate,
+                diamond_spent: amount
             },
             "Exchange completed successfully",
             true,
@@ -395,7 +437,7 @@ async function getExchangeHistoryHandler(req, res) {
 
         return generalResponse(
             res,
-            history,
+            {history, data: req.role_details},
             "Exchange history retrieved",
             true,
             false,

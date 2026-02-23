@@ -1,0 +1,98 @@
+-- -- Database migration scripts for Exchange, Transfer, and Withdrawal tables
+-- -- These are SQL scripts to create the required tables
+
+-- -- ============================================
+-- -- Create Exchange_records Table
+-- -- ============================================
+-- CREATE TABLE IF NOT EXISTS `Exchange_records` (
+--   `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+--   `user_id` INT NOT NULL,
+--   `uid` VARCHAR(50) NULL,
+--   `cash_amount` BIGINT NOT NULL DEFAULT 0,
+--   `coin_amount` BIGINT NOT NULL DEFAULT 0,
+--   `coin` BIGINT NOT NULL DEFAULT 0,
+--   `exchange_rate` DECIMAL(10, 4) NOT NULL DEFAULT 95,
+--   `votes` INT NULL DEFAULT 0,
+--   `order_no` VARCHAR(100) NULL,
+--   `trade_no` VARCHAR(100) NULL,
+--   `status` SMALLINT NOT NULL DEFAULT 1 COMMENT '0=pending, 1=completed, 2=cancelled',
+--   `add_time` BIGINT NOT NULL DEFAULT UNIX_TIMESTAMP(),
+--   `uptime` BIGINT NULL,
+--   `update_time` BIGINT NULL,
+--   `createdAt` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+--   `updatedAt` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--   FOREIGN KEY (`user_id`) REFERENCES `Users` (`user_id`) ON DELETE CASCADE,
+--   INDEX `idx_user_id` (`user_id`),
+--   INDEX `idx_status` (`status`),
+--   INDEX `idx_add_time` (`add_time`)
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -- ============================================
+-- -- Create Transfers Table
+-- -- ============================================
+-- CREATE TABLE IF NOT EXISTS `Transfers` (
+--   `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+--   `from_user_id` INT NOT NULL,
+--   `to_user_id` INT NOT NULL,
+--   `touid` VARCHAR(50) NULL,
+--   `agency_id` INT NULL,
+--   `agency` VARCHAR(100) NULL,
+--   `amount` BIGINT NOT NULL DEFAULT 0,
+--   `coin` BIGINT NOT NULL DEFAULT 0,
+--   `closing` BIGINT NULL DEFAULT 0,
+--   `Balance` BIGINT NULL DEFAULT 0,
+--   `description` TEXT NULL,
+--   `status` SMALLINT NOT NULL DEFAULT 1 COMMENT '0=pending, 1=completed, 2=cancelled, 3=failed',
+--   `add_time` BIGINT NOT NULL DEFAULT UNIX_TIMESTAMP(),
+--   `uptime` BIGINT NULL,
+--   `ip` VARCHAR(45) NULL,
+--   `createdAt` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+--   `updatedAt` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--   FOREIGN KEY (`from_user_id`) REFERENCES `Users` (`user_id`) ON DELETE CASCADE,
+--   FOREIGN KEY (`to_user_id`) REFERENCES `Users` (`user_id`) ON DELETE CASCADE,
+--   FOREIGN KEY (`agency_id`) REFERENCES `Agencies` (`id`) ON DELETE SET NULL,
+--   INDEX `idx_from_user` (`from_user_id`),
+--   INDEX `idx_to_user` (`to_user_id`),
+--   INDEX `idx_agency` (`agency_id`),
+--   INDEX `idx_status` (`status`),
+--   INDEX `idx_add_time` (`add_time`)
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -- ============================================
+-- -- Create Cash_records Table (Withdrawal)
+-- -- ============================================
+-- CREATE TABLE IF NOT EXISTS `Cash_records` (
+--   `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+--   `user_id` INT NOT NULL,
+--   `amount` BIGINT NOT NULL DEFAULT 0,
+--   `order_number` VARCHAR(100) NULL UNIQUE,
+--   `status` SMALLINT NOT NULL DEFAULT 0 COMMENT '0=pending, 1=approved, 2=rejected, 3=completed, 4=failed',
+--   `type` SMALLINT NULL DEFAULT 1 COMMENT '1=bank transfer, 2=wallet, 3=other',
+--   `account_bank` VARCHAR(100) NULL,
+--   `account` VARCHAR(100) NULL,
+--   `ifcs` VARCHAR(20) NULL,
+--   `name` VARCHAR(150) NULL,
+--   `add_time` BIGINT NOT NULL DEFAULT UNIX_TIMESTAMP(),
+--   `up_time` BIGINT NULL,
+--   `update_time` BIGINT NULL,
+--   `uptime` BIGINT NULL,
+--   `reason` TEXT NULL,
+--   `ip` VARCHAR(45) NULL,
+--   `createdAt` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+--   `updatedAt` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--   FOREIGN KEY (`user_id`) REFERENCES `Users` (`user_id`) ON DELETE CASCADE,
+--   UNIQUE KEY `unique_order_number` (`order_number`),
+--   INDEX `idx_user_id` (`user_id`),
+--   INDEX `idx_status` (`status`),
+--   INDEX `idx_add_time` (`add_time`)
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -- ============================================
+-- -- Add missing columns to Users table (if needed)
+-- -- ============================================
+-- -- Check if these columns exist before adding
+-- ALTER TABLE `Users` ADD COLUMN IF NOT EXISTS `available_coins` BIGINT DEFAULT 0;
+-- ALTER TABLE `Users` ADD COLUMN IF NOT EXISTS `money` BIGINT DEFAULT 0;
+
+-- -- Create indexes for user money column if not exists
+-- ALTER TABLE `Users` ADD INDEX IF NOT EXISTS `idx_money` (`money`);

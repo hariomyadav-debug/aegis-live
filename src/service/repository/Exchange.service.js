@@ -1,17 +1,47 @@
 const { Exchange_record, User, Agency, Agency_user, User_coinrecord } = require("../../../models");
 const { Op } = require('sequelize');
+const {sequelize} = require("../../../models");
 
 /**
  * Create an exchange record
  */
-async function createExchangeRecord(exchangeData) {
+async function createExchangeRecord(exchangeData, amount) {
+    const t = await sequelize.transaction();
+
     try {
-        const record = await Exchange_record.create(exchangeData);
+
+        const user = await User.findOne({
+            where: { user_id: exchangeData.user_id },
+            transaction: t,
+            lock: true
+        });
+
+        if (!user) throw new Error("User not found");
+
+        if (user.diamond < amount)
+            throw new Error("Insufficient diamond");
+
+        await user.increment(
+            {
+                available_coins: exchangeData.coin,
+                diamond: -amount
+            },
+            { transaction: t }
+        );
+
+        const record = await Exchange_record.create(exchangeData, { transaction: t });
+
+        await t.commit();
         return record;
-    } catch (error) {
-        console.error('Error creating exchange record:', error);
-        throw error;
+
+    } catch (err) {
+        console.error('Error creating exchange record:', err);
+        await t.rollback();
+        throw err;
+
     }
+
+
 }
 
 /**
@@ -22,7 +52,7 @@ async function getExchangeHistory(filters = {}, pagination = { page: 1, pageSize
         let { page, pageSize } = pagination;
         page = Number(page);
         pageSize = Number(pageSize);
-        
+
         const offset = (page - 1) * pageSize;
         const limit = pageSize;
 
@@ -35,6 +65,7 @@ async function getExchangeHistory(filters = {}, pagination = { page: 1, pageSize
 
         const { rows, count } = await Exchange_record.findAndCountAll(query);
 
+        console.log(rows, count, query);
         return {
             Records: rows,
             Pagination: {
@@ -72,16 +103,16 @@ async function getExchangeRate(userId) {
     try {
         // Check if user is agency owner
         const agency = await Agency.findOne({
-            where: { user_id: userId, state: 1 } // 1 = approved
+            where: { user_id: userId, state: 2 } // 2 = approved
         });
 
         if (agency) {
             // Agency owners get premium rate
-            return 9500; // or whatever your premium rate is
+            return 95; // or whatever your premium rate is
         }
 
         // Regular rate
-        return 1000; // base rate
+        return 95; // base rate
     } catch (error) {
         console.error('Error getting exchange rate:', error);
         throw error;
@@ -103,7 +134,8 @@ function validateExchangeAmount(amount) {
         return { valid: false, error: "Amount not entered" };
     }
 
-    if (!Number.isNumeric(amount)) {
+    // Fixed: Use typeof check instead of Number.isNumeric
+    if (isNaN(Number(amount))) {
         return { valid: false, error: "Amount not number" };
     }
 
@@ -113,7 +145,7 @@ function validateExchangeAmount(amount) {
 
     const minAmount = 10;
     if (Number(amount) < minAmount) {
-        return { valid: false, error: `Minimum amount should be ${minAmount}$` };
+        return { valid: false, error: `Minimum amount should be ${minAmount}` };
     }
 
     return { valid: true };

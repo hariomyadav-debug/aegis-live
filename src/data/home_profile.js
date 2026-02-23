@@ -14,7 +14,7 @@ export const structuredData = [
     // { title: "Invitaion rewards", iconUrl: `${manu_url}/invitation.png`, launchUrl: "invitation_rewards", type: 1 },
     { title: "Setting", iconUrl: `${manu_url}/setting.png`, launchUrl: "settings", type: 2 },
     // { title: "Room Admin", iconUrl: `${manu_url}/roomadmin.png`, launchUrl: "room_admin", type: 1 },
-    { title: "Help & Feedback", iconUrl: `${manu_url}/help.png`, launchUrl: "help_feedback", type: 2 },
+    // { title: "Help & Feedback", iconUrl: `${manu_url}/help.png`, launchUrl: "help_feedback", type: 2 },
 ]
 
 export const profile_manu = [

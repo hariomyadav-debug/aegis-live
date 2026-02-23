@@ -59,8 +59,8 @@ const generateLivekitToken = async (roomName, identity, role) => {
             grants = {
                 ...grants,
                 canSubscribe: true,
-                canPublish: true,
-                // canPublish: false,     // TODO: for now commited
+                // canPublish: true,    // TODO: for now commited, can be changed later according to the user role in pk battle
+                canPublish: false,     // TODO: for now commited
             };
         } else {
             // participant
@@ -78,11 +78,10 @@ const generateLivekitToken = async (roomName, identity, role) => {
         token.addGrant(grants);
         const jwt = await token.toJwt();
 
-        console.log(await roomList(), 'lisst-----------------');
-
         return {
             token: jwt,
             url: LIVEKIT_HOST,
+            roomName,
         };
 
     } catch (error) {
@@ -110,12 +109,35 @@ const removeParticipants = async (roomName, identity) => {
 }
 
 const deleteRoom = async (roomName) => {
-    if (roomService) {
+    try {
+
+        if (!roomService) return null;
+
+        // check room exists
+        const rooms = await roomService.listRooms({
+            names: [roomName]
+        });
+
+        if (!rooms || rooms.length === 0) {
+            console.log("Room does not exist:", roomName);
+            return false;
+        }
+
+        // delete room
         await roomService.deleteRoom(roomName);
+
+        console.log("Room deleted:", roomName);
+
         return true;
+
+    } catch (error) {
+
+        console.log("Error deleting room:", error.message);
+        throw error;
+
     }
-    return null
-}
+};
+
 
 
 module.exports = {

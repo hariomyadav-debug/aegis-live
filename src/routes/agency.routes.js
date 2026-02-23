@@ -1,5 +1,5 @@
 const express = require('express');
-const { authMiddleware } = require('../middleware/authMiddleware');
+const { authMiddleware, agencyAuthMiddleware} = require('../middleware/authMiddleware');
 
 const agencyController = require('../controller/agency_controller/agency.controller');
 const agencyUserController = require('../controller/agency_controller/agency_user.controller');
@@ -20,6 +20,7 @@ router.use(authMiddleware);
 router.post('/create', agencyController.createAgencyHandler);
 router.post('/search', agencyController.searchAgenciesHandler);
 router.get('/home', agencyOperationsController.getAgencyHome);
+router.get('/host-agency-home', agencyOperationsController.getAgencyHome);
 
 //  Invitation routes for agency and host
 router.post('/invite/send-to-host', agencyInvitationController.sendInvitationToHost);
@@ -29,11 +30,33 @@ router.post('/apply-as-host', agencyHostController.applyAsHost);
 router.post('/invite/my-invitations', agencyInvitationController.getMyInvitations);
 router.post('/host-dashboard', agencyHostController.getHostDashboard);
 router.post('/invite-action', agencyInvitationController.actionAgencyInvitation);
+router.post('/members-list', agencyHostController.getTeamMembers);
+
+// wallet operations
+router.get('/wallet', agencyOperationsController.getAgencyWallet);
+
+router.post('/exchange', agencyAuthMiddleware, agencyOperationsController.exchangeMoneyForCoins);
+router.post('/exchange-history', agencyAuthMiddleware, agencyOperationsController.getExchangeHistoryHandler);
+
+router.post('/transfer', agencyAuthMiddleware, agencyOperationsController.transferMoney);
+router.post('/transfer-history', agencyAuthMiddleware, agencyOperationsController.getTransferHistoryHandler);
+
+router.post('/:agency_id/member/:member_id/remove', agencyHostController.removeMember);
 
 
+
+
+
+
+
+// ----------------  Pendding routes ------------------
+
+// Withdrawal operations
+router.post('/withdrawal-request', agencyOperationsController.requestWithdrawal);
+router.post('/withdrawal-history', agencyOperationsController.getWithdrawalHistoryHandler);
 
 // working on this
-router.post('/invite/:invitation_id/reject', agencyInvitationController.rejectAgencyInvitation);
+// router.post('/invite/:invitation_id/reject', agencyInvitationController.rejectAgencyInvitation);
 router.post('/user/:id/approve', agencyUserController.approveAgencyUserHandler);
 
 
@@ -45,19 +68,10 @@ router.post('/:id/reject', agencyController.rejectAgencyHandler);
 // ==================== AGENCY OPERATIONS ROUTES ====================
 
 // Agency home and wallet
-router.post('/wallet', agencyOperationsController.getAgencyWallet);
 
-// Transfer operations
-router.post('/transfer', agencyOperationsController.transferMoney);
-router.post('/transfer-history', agencyOperationsController.getTransferHistoryHandler);
 
 // Exchange operations
-router.post('/exchange', agencyOperationsController.exchangeMoneyForCoins);
-router.post('/exchange-history', agencyOperationsController.getExchangeHistoryHandler);
 
-// Withdrawal operations
-router.post('/withdrawal-request', agencyOperationsController.requestWithdrawal);
-router.post('/withdrawal-history', agencyOperationsController.getWithdrawalHistoryHandler);
 
 // ==================== AGENCY USER/HOST ROUTES ====================
 
@@ -72,8 +86,6 @@ router.post('/user/:id/reject', agencyUserController.rejectAgencyUserHandler);
 // ==================== HOST/TEAM MANAGEMENT ROUTES ====================
 
 router.post('/host/dashboard', agencyHostController.getHostDashboard);
-router.post('/:agency_id/members', agencyHostController.getTeamMembers);
-router.post('/:agency_id/member/:member_id/remove', agencyHostController.removeMember);
 router.post('/:agency_id/member/:member_id/stats', agencyHostController.getMemberStats);
 router.post('/:agency_id/member/:member_id/commission', agencyHostController.updateMemberCommission);
 router.post('/search-available', agencyHostController.searchAvailableAgencies);

@@ -19,7 +19,7 @@ const { redis } = require("../../helper/redis");
 const fs = require('fs');
 const path = require('path');
 const { topSendersList, topReceiversList } = require("../leaderboard_controller/top_users.controller");
-const { generateLivekitToken, deleteRoom, removeParticipants } = require("../../service/common/livekit.service.js");
+const { generateLivekitToken, deleteRoom, removeParticipants } = require("../../service/common/livekit.service");
 const { top_ranking_pk_sender } = require("../../helper/pkSocket.helper.js");
 const { hsetRedis } = require("../../service/common/redis.service.js");
 const redis_keys = require("../../utils/redis.key.js");
@@ -229,7 +229,7 @@ async function join_live(socket, data, emitEvent, joinRoom, emitToRoom, getRoomM
             });
         }
         joinRoom(socket, data.socket_room_id);
-        const livekit_details = await generateLivekitToken(data.socket_room_id, socket.authData.user_id, 'viewer');
+        let livekit_details = await generateLivekitToken(data.socket_room_id, socket.authData.user_id, 'viewer');
 
         await updateLive(
             {
@@ -281,6 +281,7 @@ async function join_live(socket, data, emitEvent, joinRoom, emitToRoom, getRoomM
         // live_state_update 
         if (main_host_user_id) {
             const payload = {
+                battle_status: "active",
                 [Op.or]: [
                     { host1_socket_room_id: data.socket_room_id, host1_user_id: main_host_user_id },
                     { host2_socket_room_id: data.socket_room_id, host2_user_id: main_host_user_id }
@@ -290,6 +291,9 @@ async function join_live(socket, data, emitEvent, joinRoom, emitToRoom, getRoomM
             const pkdetails = await getPkById(payload, true);
             if (pkdetails) {
                 // PK Update on join user
+                livekit_details = await generateLivekitToken(pkdetails.dataValues.pk_battle_id, socket.authData.user_id, 'viewer');
+                console.log("PK details on join live:==================>", livekit_details);
+                emitEvent(socket.id, 'pk_livekit_token_details', livekit_details);
                 return emitEvent(socket.id, "live_state_update", pkdetails.dataValues);
             }
         }
