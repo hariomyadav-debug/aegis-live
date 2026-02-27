@@ -26,9 +26,7 @@ async function getHostDashboard(req, res) {
         const { agency_id } = req.body;
         const userId = req.authData?.user_id;
 
-        
-
-        if (!agency_id || !userId) {
+        if ( !userId) {
             return generalResponse(
                 res,
                 {},
@@ -39,12 +37,13 @@ async function getHostDashboard(req, res) {
             );
         }
 
+        let filterPayload = { user_id: userId, state: 2 };
+        if (agency_id) {
+            filterPayload.agency_id = agency_id;
+        }
+
         // Check if user is a host in this agency
-        const hostInfo = await getAgencyUser({
-            user_id: userId,
-            agency_id: agency_id,
-            state: 2  // approved
-        });
+        const hostInfo = await getAgencyUser(filterPayload);
 
         if (!hostInfo) {
             return generalResponse(

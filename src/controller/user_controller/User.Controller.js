@@ -11,6 +11,8 @@ const { Social, Media } = require("../../../models")
 const { structuredData, profile_manu } = require("../../data/home_profile");
 const { emojiData } = require("../../data/emoji.data");
 const { getLevels, getUserLevel } = require("../../service/repository/Level.service");
+const { getAgencyById } = require("../../service/repository/Agency.service");
+const { getAgencyUser } = require("../../service/repository/Agency_user.service");
 require("dotenv").config();
 
 
@@ -542,6 +544,9 @@ async function update_notificationList(req, res) {
 
 
 async function getUserDetails(req, res) {
+    const manu_url = `${process.env.baseUrl}/uploads/home_profiles`;
+    const baseUrl_Web = `${process.env.baseUrl_aapapi}/appapi/pages`;
+    let structuredData1 = [...structuredData];
     try {
         const currentUserId = req.authData.user_id;
 
@@ -549,13 +554,30 @@ async function getUserDetails(req, res) {
 
         const userData = await getUser({ user_id: currentUserId });
 
+
+        const agency = await getAgencyById({ user_id: currentUserId, state: 2 });
+        if (agency) {
+            console.log("=========>agency", 1);
+            structuredData1.push({ title: "Agency", iconUrl: `${manu_url}/agency.png`, launchUrl: `${baseUrl_Web}/agency/dashboard`, type: 1 })
+        }else{
+            const agencyUser = await getAgencyUser({ user_id: currentUserId, state: 2 });
+            if ( agencyUser) {
+                console.log("=========>agency", 2);
+                structuredData1.push({ title: "Host", iconUrl: `${manu_url}/host.png`, launchUrl: `${baseUrl_Web}/agency/host_dashboard`, type: 1 })
+            } else {
+                console.log("=========>agency", 3);
+                structuredData1.push({ title: "Apply Host", iconUrl: `${manu_url}/apppy_host.png`, launchUrl: `${baseUrl_Web}/applyhost`, type: 1 })
+                structuredData1.push({ title: "Apply Agency", iconUrl: `${manu_url}/apply_agency.png`, launchUrl: `${baseUrl_Web}/agency/create`, type: 1 })
+            }
+        }
+
         return generalResponse(
             res,
             {
-                data: structuredData,
+                data: structuredData1,
                 daimond: userData.get("diamond"),
                 recommendedData: recommendedUsers,
-                profile_manu: profile_manu
+                profile_manu: profile_manu,
             },
             "Data Found",
             true,
@@ -614,7 +636,7 @@ async function getUserByAuth(req, res) {
         }
         console.log("=========>user", user.dataValues.level);
         if (user && user.dataValues && user.dataValues.level) {
-            data.current_level = user.dataValues.level || user.level; 
+            data.current_level = user.dataValues.level || user.level;
         } else {
             // let level = await getUserLevel({ level_id: 1 });
             data.current_level = {
@@ -632,7 +654,7 @@ async function getUserByAuth(req, res) {
 
         let next_level = await getUserLevel({ level_id: data.current_level.level_id + 1 });
         if (!next_level) {
-            next_level = user.dataValues.level || user.level; 
+            next_level = user.dataValues.level || user.level;
         }
         data.next_level = next_level;
 

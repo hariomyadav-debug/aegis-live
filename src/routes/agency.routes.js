@@ -35,6 +35,9 @@ router.post('/members-list', agencyHostController.getTeamMembers);
 // wallet operations
 router.get('/wallet', agencyOperationsController.getAgencyWallet);
 
+// Policy data
+router.get('/policy', agencyAuthMiddleware, agencyOperationsController.getPolicyDataHandler);
+
 router.post('/exchange', agencyAuthMiddleware, agencyOperationsController.exchangeMoneyForCoins);
 router.post('/exchange-history', agencyAuthMiddleware, agencyOperationsController.getExchangeHistoryHandler);
 
@@ -43,13 +46,14 @@ router.post('/transfer-history', agencyAuthMiddleware, agencyOperationsControlle
 
 router.post('/:agency_id/member/:member_id/remove', agencyHostController.removeMember);
 
+router.post('/agency-approve', agencyController.approveAgencyHandler);
 
 
 
 
 
 
-// ----------------  Pendding routes ------------------
+// ----------------  Pendding routes  Currently not in use ------------------
 
 // Withdrawal operations
 router.post('/withdrawal-request', agencyOperationsController.requestWithdrawal);
@@ -62,18 +66,8 @@ router.post('/user/:id/approve', agencyUserController.approveAgencyUserHandler);
 
 router.put('/:id', agencyController.updateAgencyHandler);
 router.delete('/:id', agencyController.deleteAgencyHandler);
-router.post('/:id/approve', agencyController.approveAgencyHandler);
 router.post('/:id/reject', agencyController.rejectAgencyHandler);
 
-// ==================== AGENCY OPERATIONS ROUTES ====================
-
-// Agency home and wallet
-
-
-// Exchange operations
-
-
-// ==================== AGENCY USER/HOST ROUTES ====================
 
 router.post('/user/create', agencyUserController.createAgencyUserHandler);
 router.post('/user/list', agencyUserController.getAgencyUsersHandler);

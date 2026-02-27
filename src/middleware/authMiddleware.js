@@ -176,15 +176,19 @@ const soketAuthMiddleware = async (socket, next) => {
 const agencyAuthMiddleware = async (req, res, next) => {
 
   const user_id = req?.authData?.user_id;
+  console.log("User ID from auth data:", user_id);
   try {
     let agency = await getAgency({ user_id: user_id, state: 2 });
+    let is_Agency = true;
     if (!agency) {
        agency = await getAgencyUser({ user_id: user_id, state: 2 });
+       is_Agency = false;
        req.role_details = agency; // Attach the agency data to the request object for later use
        if(!agency) {
          return generalResponse(res, {}, "This access is not allowed, only for agency members.", false, true, 404);
         }
       }
+      agency['is_Agency'] = is_Agency;
       req.role_details = agency; // Attach the agency data to the request object for later use
       
   } catch (error) {

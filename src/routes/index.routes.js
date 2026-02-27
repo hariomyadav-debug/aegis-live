@@ -21,6 +21,7 @@ const auth_routes = require('./auth.routes')
 const avatar_routes= require("./Avatar.routes") 
 const language_routes= require("./Language.routes"); 
 const leaderboard_routes= require("./leaderboard.routes"); 
+const contribution_routes = require("./contribution.routes");
 
 const store_routes = require("./store.routes");
 const level_routes = require('./level.routes');
@@ -50,6 +51,7 @@ router.use("/gift" , giftRoutes)
 router.use("/game" , gameRoutes)
 router.use("/transaction", transactionRoutes)
 router.use("/leader-board", leaderboard_routes)
+router.use("/contribution", contribution_routes)
 router.use("/live", liveRoutes )
 router.use("/pk", pkRoutes )
 

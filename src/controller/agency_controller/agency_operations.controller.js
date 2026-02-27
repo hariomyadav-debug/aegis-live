@@ -575,6 +575,72 @@ async function getWithdrawalHistoryHandler(req, res) {
     }
 }
 
+/**
+ * Get agency salary policy data (25 levels)
+ * GET /api/agency/policy
+ */
+async function getPolicyDataHandler(req, res) {
+    try {
+        let policyData = [
+            { level: 1, targetGift: 60000, hostSalary: 3, agentCommission: 0.6, levelName: 'Bronze' },
+            { level: 2, targetGift: 120000, hostSalary: 6, agentCommission: 1.2, levelName: 'Silver' },
+            { level: 3, targetGift: 180000, hostSalary: 9, agentCommission: 1.8, levelName: 'Gold' },
+            { level: 4, targetGift: 240000, hostSalary: 12, agentCommission: 2.4, levelName: 'Platinum' },
+            { level: 5, targetGift: 320000, hostSalary: 16, agentCommission: 3.8, levelName: 'Diamond' },
+            { level: 6, targetGift: 410000, hostSalary: 19.3, agentCommission: 4.1, levelName: 'Emerald' },
+            { level: 7, targetGift: 530000, hostSalary: 23.9, agentCommission: 5.3, levelName: 'Ruby' },
+            { level: 8, targetGift: 650000, hostSalary: 30.6, agentCommission: 6.5, levelName: 'Sapphire' },
+            { level: 9, targetGift: 760000, hostSalary: 34.2, agentCommission: 7.6, levelName: 'Topaz' },
+            { level: 10, targetGift: 880000, hostSalary: 44, agentCommission: 8.8, levelName: 'Diamond Elite' },
+            { level: 11, targetGift: 1200000, hostSalary: 60, agentCommission: 14.4, levelName: 'Platinum Pro' },
+            { level: 12, targetGift: 1500000, hostSalary: 67.5, agentCommission: 15, levelName: 'Gold Master' },
+            { level: 13, targetGift: 2000000, hostSalary: 100, agentCommission: 20, levelName: 'Silver King' },
+            { level: 14, targetGift: 3500000, hostSalary: 157.5, agentCommission: 35, levelName: 'Bronze Emperor' },
+            { level: 15, targetGift: 4500000, hostSalary: 202.5, agentCommission: 54, levelName: 'Crown Prince' },
+            { level: 16, targetGift: 5600000, hostSalary: 252, agentCommission: 56, levelName: 'Royal' },
+            { level: 17, targetGift: 6500000, hostSalary: 292.5, agentCommission: 65, levelName: 'Imperial' },
+            { level: 18, targetGift: 8900000, hostSalary: 400.5, agentCommission: 89, levelName: 'Supreme' },
+            { level: 19, targetGift: 10000000, hostSalary: 450, agentCommission: 100, levelName: 'Overlord' },
+            { level: 20, targetGift: 15000000, hostSalary: 675, agentCommission: 180, levelName: 'Celestial' },
+            { level: 21, targetGift: 20000000, hostSalary: 900, agentCommission: 200, levelName: 'Divine' },
+            { level: 22, targetGift: 40000000, hostSalary: 1800, agentCommission: 400, levelName: 'Immortal' },
+            { level: 23, targetGift: 70000000, hostSalary: 3150, agentCommission: 840, levelName: 'Transcendent' },
+            { level: 24, targetGift: 90000000, hostSalary: 4050, agentCommission: 900, levelName: 'Eternal' },
+            { level: 25, targetGift: 100000000, hostSalary: 4500, agentCommission: 1200, levelName: 'Legendary' },
+        ];
+
+        console.log("Policy data retrieved:", req.role_details.is_Agency);
+
+        if(!req.role_details.is_Agency) {
+             policyData = policyData.map((data)=> {
+                const filteredData = { ...data };
+                delete filteredData.agentCommission;
+                return filteredData;
+            })
+
+        }
+
+        return generalResponse(
+            res,
+            policyData,
+            "Policy data retrieved successfully",
+            true,
+            false,
+            200
+        );
+    } catch (error) {
+        console.error("Error in policy data", error);
+        return generalResponse(
+            res,
+            { success: false },
+            "Error retrieving policy data",
+            false,
+            true,
+            500
+        );
+    }
+}
+
 module.exports = {
     getAgencyHome,
     getAgencyWallet,
@@ -583,5 +649,6 @@ module.exports = {
     exchangeMoneyForCoins,
     getExchangeHistoryHandler,
     requestWithdrawal,
-    getWithdrawalHistoryHandler
+    getWithdrawalHistoryHandler,
+    getPolicyDataHandler
 };

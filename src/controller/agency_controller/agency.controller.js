@@ -465,10 +465,9 @@ async function searchAgenciesHandler(req, res) {
  */
 async function approveAgencyHandler(req, res) {
     try {
-        const { id } = req.params;
-        const { reason } = req.body;
+        const { reason, id: agencyid } = req.body || { reason: "Approved by admin", id: null };
 
-        if (!id) {
+        if (!agencyid) {
             return generalResponse(
                 res,
                 {},
@@ -479,7 +478,7 @@ async function approveAgencyHandler(req, res) {
             );
         }
 
-        const agency = await getAgencyById({id: id});
+        const agency = await getAgencyById({id: agencyid, state: 0}); // only pending agencies can be approved
         if (!agency) {
             return generalResponse(
                 res,
@@ -493,14 +492,14 @@ async function approveAgencyHandler(req, res) {
 
         const updated = await updateAgency(
             {
-                state: 1,  // approved
+                state: 2,  // approved
                 reason: reason || null,
                 update_time: Date.now().toString()
             },
-            { id }
+            { id: agencyid }
         );
 
-        const updatedAgency = await getAgencyById({id: id});
+        const updatedAgency = await getAgencyById({id: agencyid});
 
         return generalResponse(
             res,
